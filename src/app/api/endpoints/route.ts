@@ -34,7 +34,7 @@ export async function GET(req: Request) {
 
   // Get notification counts for endpoints
   const endpointsWithCount = await Promise.all(
-    (endpoints || []).map(async (ep) => {
+    (endpoints || []).map(async (ep: any) => {
       const { count } = await supabase
         .from('Notification')
         .select('*', { count: 'exact', head: true })
@@ -75,6 +75,7 @@ export async function POST(req: Request) {
       companyId: ctx.companyId,
       label: validated.label,
       localPartInput: validated.localPart,
+      domainName: body.domainName, // Passing the custom domain for testing
       customerId: validated.customerId,
       siteId: validated.siteId,
       recipients: validated.recipients || [],

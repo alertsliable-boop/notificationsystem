@@ -76,7 +76,7 @@ export default function LoginPage() {
         </div>
 
         <div className="relative z-10 text-blue-200 text-sm">
-          © 2024 Liable Alerts. All rights reserved.
+          © 2026 Liable Alerts. All rights reserved.
         </div>
       </div>
 

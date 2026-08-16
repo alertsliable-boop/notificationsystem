@@ -48,7 +48,7 @@ export default async function BillingPage() {
     return [`${max}+ Custom Active Email Endpoints`, 'Dedicated SMS Gateways', 'Unlimited Team Members', 'Enterprise SLA & Compliance', 'Custom Integrations', 'Dedicated Account Manager'];
   };
 
-  const PLANS = dbPlans.map(p => ({
+  const PLANS = dbPlans.map((p: any) => ({
     ...p,
     features: getFeatures(p.code, p.maxActiveEndpoints),
     recommended: p.code === 'pro'
@@ -141,7 +141,7 @@ export default async function BillingPage() {
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
-          {PLANS.map((plan) => {
+          {PLANS.map((plan: any) => {
             const isCurrent = plan.code === currentPlanCode;
             return (
               <Card 

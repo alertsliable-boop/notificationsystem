@@ -12,6 +12,7 @@ export default function CreateEndpointPage() {
   const router = useRouter();
   const [label, setLabel] = useState('');
   const [customHandle, setCustomHandle] = useState('');
+  const [domain, setDomain] = useState('mail.liablealerts.com');
   const [notes, setNotes] = useState('');
   const [severityTag, setSeverityTag] = useState('');
   const [customerId, setCustomerId] = useState('');
@@ -89,6 +90,7 @@ export default function CreateEndpointPage() {
       body: JSON.stringify({ 
         label, 
         localPart: customHandle || undefined,
+        domainName: domain,
         notes, 
         severityTag: severityTag || undefined, 
         customerId, 
@@ -118,7 +120,7 @@ export default function CreateEndpointPage() {
     ? label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 16)
     : 'your-endpoint');
 
-  const previewAddress = `${displayedHandle}@mail.liablealerts.com`;
+  const previewAddress = `${displayedHandle}@${domain}`;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fadeIn py-6">
@@ -141,7 +143,7 @@ export default function CreateEndpointPage() {
           <p className="text-xs font-semibold text-blue-900 uppercase tracking-wider mb-1">Inbound Email Address Preview:</p>
           <code className="text-base font-mono text-blue-700 font-bold break-all">{previewAddress}</code>
           <p className="text-xs text-blue-600/80 mt-1">
-            Configure this email address into your software or monitoring equipment (e.g. <span className="font-mono text-blue-800">building1@mail.liablealerts.com</span>).
+            Configure this email address into your software or monitoring equipment (e.g. <span className="font-mono text-blue-800">building1@{domain}</span>).
           </p>
         </div>
       </div>
@@ -195,9 +197,14 @@ export default function CreateEndpointPage() {
                   placeholder="e.g. building1, warehouse, generator1"
                   className="flex-1 border border-gray-300 bg-white rounded-l-xl px-4 py-2.5 text-sm text-gray-900 font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
-                <span className="bg-gray-100 border border-l-0 border-gray-300 text-gray-600 px-3 py-2.5 text-sm font-mono rounded-r-xl">
-                  @mail.liablealerts.com
-                </span>
+                <select
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
+                  className="bg-gray-100 border border-l-0 border-gray-300 text-gray-600 px-3 py-2.5 text-sm font-mono rounded-r-xl outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="mail.liablealerts.com">@mail.liablealerts.com</option>
+                  <option value="gmail.com">@gmail.com</option>
+                </select>
               </div>
               <p className="text-xs text-gray-500 mt-1">Leave blank to auto-generate a unique prefix based on your label.</p>
             </div>

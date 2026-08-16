@@ -236,7 +236,7 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <div className="divide-y divide-gray-50">
-              {recentNotifications.map((notif) => {
+              {recentNotifications.map((notif: any) => {
                 const allDelivered = notif.smsMessages.length > 0 && notif.smsMessages.every((m: any) => m.status === 'DELIVERED');
                 const anyFailed = notif.smsMessages.some((m: any) => ['FAILED', 'UNDELIVERED'].includes(m.status));
                 const isPending = notif.smsMessages.some((m: any) => ['QUEUED', 'SENDING'].includes(m.status));

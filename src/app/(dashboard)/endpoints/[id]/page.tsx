@@ -157,7 +157,7 @@ export default async function EndpointDetailPage({
               </div>
             ) : (
               <div className="divide-y divide-gray-50">
-                {recentNotifications.map((notif) => {
+                {recentNotifications.map((notif: any) => {
                   const smsCount = notif.smsMessages?.length || 0;
                   const allDelivered = smsCount > 0 && notif.smsMessages.every((m: any) => m.status === 'DELIVERED');
                   const anyFailed = notif.smsMessages.some((m: any) => ['FAILED', 'UNDELIVERED'].includes(m.status));

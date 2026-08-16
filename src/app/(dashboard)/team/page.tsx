@@ -58,7 +58,7 @@ export default async function TeamPage() {
         </div>
 
         <div className="divide-y divide-gray-50">
-          {memberships.map((m) => {
+          {memberships.map((m: any) => {
             const role = roleConfig[m.role] || roleConfig.MEMBER;
             const isCurrentUser = m.userId === session.user.id;
             return (

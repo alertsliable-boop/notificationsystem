@@ -109,6 +109,7 @@ export async function createEndpoint({
   companyId,
   label,
   localPartInput,
+  domainName,
   customerId,
   siteId,
   recipients,
@@ -118,6 +119,7 @@ export async function createEndpoint({
   companyId: string;
   label: string;
   localPartInput?: string;
+  domainName?: string;
   customerId: string;
   siteId: string;
   recipients: string[];
@@ -133,16 +135,17 @@ export async function createEndpoint({
   }
 
   // Get or create platform domain
+  const targetDomainName = domainName || 'mail.liablealerts.com';
   let { data: domain } = await supabase
     .from('Domain')
     .select('*')
-    .eq('hostname', 'mail.liablealerts.com')
+    .eq('hostname', targetDomainName)
     .single();
 
   if (!domain) {
     const { data: newDomain } = await supabase
       .from('Domain')
-      .insert({ hostname: 'mail.liablealerts.com' })
+      .insert({ hostname: targetDomainName })
       .select()
       .single();
     domain = newDomain;

@@ -20,7 +20,12 @@ export async function GET() {
     .eq('companyId', ctx.companyId)
     .order('name', { ascending: true });
 
-  return NextResponse.json({ data: sites });
+  const mappedSites = (sites || []).map((s: any) => ({
+    ...s,
+    _count: { endpoints: s.endpoints?.length || 0 }
+  }));
+
+  return NextResponse.json({ data: mappedSites });
 }
 
 export async function POST(req: Request) {

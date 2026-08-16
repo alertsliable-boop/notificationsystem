@@ -22,7 +22,15 @@ export async function GET() {
     .eq('companyId', ctx.companyId)
     .order('name', { ascending: true });
 
-  return NextResponse.json({ data: customers });
+  const mappedCustomers = (customers || []).map((c: any) => ({
+    ...c,
+    _count: {
+      sites: c.sites?.length || 0,
+      endpoints: c.endpoints?.length || 0
+    }
+  }));
+
+  return NextResponse.json({ data: mappedCustomers });
 }
 
 // POST create customer

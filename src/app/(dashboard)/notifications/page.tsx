@@ -101,7 +101,7 @@ export default async function NotificationsPage({
             >
               All
             </Link>
-            {endpoints.map((ep) => (
+            {endpoints.map((ep: any) => (
               <Link
                 key={ep.id}
                 href={`/notifications?endpointId=${ep.id}`}
@@ -147,7 +147,7 @@ export default async function NotificationsPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {notifications.map((notif) => {
+                  {notifications.map((notif: any) => {
                     const allDelivered = notif.smsMessages.length > 0 && notif.smsMessages.every((m: any) => m.status === 'DELIVERED');
                     const anyFailed = notif.smsMessages.some((m: any) => ['FAILED', 'UNDELIVERED'].includes(m.status));
                     const overallStatus = anyFailed ? 'FAILED' : allDelivered ? 'DELIVERED' : 'PENDING';

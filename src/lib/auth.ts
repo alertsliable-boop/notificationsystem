@@ -67,25 +67,16 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async redirect({ url, baseUrl }) {
-      // Always redirect to port 3001 instead of 3000
-      const correctBaseUrl = baseUrl.replace(':3000', ':3001');
-      
-      // If signing out, go to landing page
       if (url.includes('signout') || url.includes('signOut')) {
-        return correctBaseUrl;
+        return baseUrl;
       }
-      
-      // If the url is relative, append it to the correct base URL
       if (url.startsWith('/')) {
-        return `${correctBaseUrl}${url}`;
+        return `${baseUrl}${url}`;
       }
-      
-      // If the url is already absolute and on the same origin
-      if (url.startsWith(baseUrl) || url.startsWith(correctBaseUrl)) {
-        return url.replace(':3000', ':3001');
+      if (url.startsWith(baseUrl)) {
+        return url;
       }
-      
-      return correctBaseUrl;
+      return `${baseUrl}/dashboard`;
     },
   },
 };

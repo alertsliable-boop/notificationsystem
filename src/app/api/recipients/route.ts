@@ -14,7 +14,12 @@ export async function GET() {
     .eq('companyId', ctx.companyId)
     .order('label', { ascending: true });
 
-  return NextResponse.json({ data: recipients });
+  const mappedRecipients = (recipients || []).map((r: any) => ({
+    ...r,
+    _count: { endpoints: r.endpoints?.length || 0 }
+  }));
+
+  return NextResponse.json({ data: mappedRecipients });
 }
 
 // POST /api/recipients
