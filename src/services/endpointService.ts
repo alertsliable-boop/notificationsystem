@@ -1,6 +1,7 @@
 import { getAdminClient } from '@/lib/supabase';
 import { enqueueSmsJob } from '@/lib/queue';
 import crypto from 'crypto';
+import { processSmsFanout } from '../../worker/jobs/smsFanout';
 
 export class PlanLimitExceededError extends Error {
   constructor(msg = 'Plan limit exceeded. Upgrade your subscription plan to activate more email accounts.') {
@@ -338,7 +339,6 @@ export async function processInboundEmail(formEntries: Record<string, string>) {
     if (!jobRes) {
       console.log(`[INBOUND] Redis queue unavailable — falling back to direct SMS sending for notification ${notification.id}`);
       try {
-        const { processSmsFanout } = await import('../../worker/jobs/smsFanout');
         await processSmsFanout({ data: { notificationId: notification.id, endpointId: endpoint.id } } as any);
       } catch (err: any) {
         console.error(`[INBOUND] Direct SMS fallback failed for notification ${notification.id}:`, err.message);

@@ -9,15 +9,42 @@ export async function processSmsFanout(job: Job) {
 
   // Fetch the notification and its related endpoint and recipients
   const supabase = getAdminClient();
+  
+  // 1. Fetch Notification
   const { data: notification } = await supabase
     .from('Notification')
-    .select('*, endpoint:InboundEndpoint(*, recipients:EndpointRecipient(recipient:PhoneRecipient(*)))')
+    .select('*')
     .eq('id', notificationId)
     .single();
 
-  if (!notification || !notification.endpoint) {
+  if (!notification || !notification.endpointId) {
     throw new Error(`Notification ${notificationId} not found or has no endpoint.`);
   }
+
+  // 2. Fetch Endpoint
+  const { data: endpoint } = await supabase
+    .from('InboundEndpoint')
+    .select('*')
+    .eq('id', notification.endpointId)
+    .single();
+    
+  if (!endpoint) {
+    throw new Error(`Endpoint not found for notification ${notificationId}.`);
+  }
+  
+  // 3. Fetch EndpointRecipients
+  const { data: endpointRecipients } = await supabase
+    .from('EndpointRecipient')
+    .select('*, recipient:PhoneRecipient(*)')
+    .eq('endpointId', endpoint.id);
+    
+  if (!endpointRecipients) {
+    throw new Error(`Failed to fetch recipients for endpoint ${endpoint.id}.`);
+  }
+
+  // Inject back for the rest of the function
+  notification.endpoint = endpoint;
+  notification.endpoint.recipients = endpointRecipients;
 
   const activeRecipients = notification.endpoint.recipients.filter(
     (er: any) => !er.recipient.optedOut
