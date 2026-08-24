@@ -18,10 +18,19 @@ export default function CustomersPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchCustomers = async () => {
-    const res = await fetch('/api/customers');
-    const json = await res.json();
-    setCustomers(json.data || []);
-    setLoading(false);
+    try {
+      const res = await fetch('/api/customers');
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || 'Failed to load customers');
+      } else {
+        setCustomers(json.data || []);
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchCustomers(); }, []);

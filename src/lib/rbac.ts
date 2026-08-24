@@ -3,7 +3,7 @@
  * Used server-side in API routes to enforce authorization rules.
  */
 
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { getAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
@@ -21,7 +21,7 @@ export interface AuthContext {
  */
 export async function getAuthContext(): Promise<AuthContext | null> {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return null;
+  if (!session?.user?.id) { console.error("No session found in getAuthContext"); return null; }
 
   const supabase = getAdminClient();
   const { data: membership, error } = await supabase

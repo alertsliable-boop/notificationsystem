@@ -28,12 +28,25 @@ export default function EndpointsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
   const fetchEndpoints = useCallback(async () => {
-    const res = await fetch('/api/endpoints');
-    const json = await res.json();
-    setEndpoints(json.data || []);
-    setLoading(false);
+    try {
+      const res = await fetch('/api/endpoints');
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || 'Failed to load endpoints');
+        setEndpoints([]);
+      } else {
+        setEndpoints(json.data || []);
+        setError('');
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred');
+      setEndpoints([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchEndpoints(); }, [fetchEndpoints]);
@@ -57,17 +70,19 @@ export default function EndpointsPage() {
   };
 
   const copyAddress = (ep: Endpoint) => {
-    const addr = `${ep.localPart}@${ep.domain?.hostname || 'mail.liablealerts.com'}`;
+    const addr = `${ep.localPart}@${ep.domain?.hostname || 'liablealerts.com'}`;
     navigator.clipboard.writeText(addr);
     setCopied(ep.id);
     setTimeout(() => setCopied(null), 2000);
   };
 
   const filteredEndpoints = endpoints.filter(ep => {
-    const matchesSearch = (ep.label?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ep.localPart.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ep.customer?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ep.site?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = (
+      (ep.label || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (ep.localPart || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (ep.customer?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (ep.site?.name || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
     
     if (filterStatus === 'ALL') return matchesSearch;
     return matchesSearch && ep.status === filterStatus;
@@ -193,14 +208,14 @@ export default function EndpointsPage() {
                 <Mail className="w-8 h-8 text-blue-600" />
               </div>
               <h3 className="font-bold text-lg text-gray-900 mb-2">
-                {searchQuery ? 'No matching endpoints found' : 'No email endpoints configured yet'}
+                {error ? 'Failed to load endpoints' : (searchQuery ? 'No matching endpoints found' : 'No email endpoints configured yet')}
               </h3>
               <p className="text-gray-600 mb-6 max-w-md text-sm">
-                {searchQuery 
+                {error ? error : (searchQuery 
                   ? 'Try clearing or adjusting your search filters.'
-                  : 'Create your first unique email account endpoint to begin capturing equipment notifications.'}
+                  : 'Create your first unique email account endpoint to begin capturing equipment notifications.')}
               </p>
-              {!searchQuery && (
+              {!searchQuery && !error && (
                 <Link href="/endpoints/new">
                   <Button variant="primary" icon={<Plus className="w-4 h-4" />}>
                     Configure First Endpoint

@@ -1,10 +1,11 @@
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { getAdminClient } from '@/lib/supabase';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Zap, LogOut, Mail } from 'lucide-react';
 import { MainSidebarNav, SettingsSidebarNav } from './SidebarNav';
+import PageTransition from '@/components/PageTransition';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -152,7 +153,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
         {/* Page Content */}
         <div className="flex-1 overflow-y-auto bg-gray-50 p-8">
           <div className="max-w-[1280px] mx-auto">
-            {children}
+            <PageTransition>
+              {children}
+            </PageTransition>
           </div>
         </div>
       </main>
