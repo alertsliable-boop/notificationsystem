@@ -41,10 +41,12 @@ export async function POST(req: Request) {
     };
 
     // 3. Acknowledge immediately, process async-friendly
-    // (In production this runs in Next.js Edge/Node — heavy work goes to the queue)
-    processInboundEmail(entries).catch((err) => {
+    // In Vercel serverless we MUST await the promise before returning, or it gets killed
+    try {
+      await processInboundEmail(entries);
+    } catch (err) {
       console.error('[INBOUND WEBHOOK] Processing error:', err);
-    });
+    }
 
     // 4. Fast acknowledge to Resend (prevents retry)
     return new NextResponse('OK', { status: 200 });

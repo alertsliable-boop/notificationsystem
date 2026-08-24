@@ -84,12 +84,22 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   if (!endpoint) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  // Soft-delete: just deactivate
+  // First, delete any associated recipients to avoid foreign key violations
   await supabase
+    .from('EndpointRecipient')
+    .delete()
+    .eq('endpointId', id);
+
+  // Hard-delete the endpoint
+  const { error: deleteError } = await supabase
     .from('InboundEndpoint')
-    .update({ status: 'INACTIVE' })
+    .delete()
     .eq('id', id);
 
-  await auditLog(ctx, 'DEACTIVATE_ENDPOINT', 'InboundEndpoint', id);
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message || 'Failed to delete' }, { status: 400 });
+  }
+
+  await auditLog(ctx, 'DELETE_ENDPOINT', 'InboundEndpoint', id);
   return NextResponse.json({ success: true });
 }
