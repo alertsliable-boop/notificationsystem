@@ -487,7 +487,7 @@ class QueryBuilder<T = any> {
           if (!itemCopy.id) {
             itemCopy.id = nanoid();
           }
-          if (itemCopy.createdAt === undefined && this.tableName !== 'EndpointRecipient' && this.tableName !== 'Membership' && this.tableName !== 'Domain' && this.tableName !== 'Customer' && this.tableName !== 'Site' && this.tableName !== 'PhoneRecipient') {
+          if (itemCopy.createdAt === undefined && this.tableName !== 'EndpointRecipient' && this.tableName !== 'Membership' && this.tableName !== 'Domain' && this.tableName !== 'Customer' && this.tableName !== 'Site' && this.tableName !== 'PhoneRecipient' && this.tableName !== 'Notification' && this.tableName !== 'NotificationPayload') {
             itemCopy.createdAt = new Date().toISOString();
           }
           if (itemCopy.updatedAt === undefined && (this.tableName === 'Company' || this.tableName === 'InboundEndpoint' || this.tableName === 'SmsMessage')) {
