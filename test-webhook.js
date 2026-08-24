@@ -1,4 +1,4 @@
-const LOCAL_URL = 'http://localhost:3000';
+const LOCAL_URL = 'https://notificationsystem-nine.vercel.app';
 // If you don't have INBOUND_WEBHOOK_SECRET in your .env.local, we assume it's undefined
 // For testing locally without setting it, you can pass 'undefined' string or temporarily disable the check.
 // It's highly recommended to add INBOUND_WEBHOOK_SECRET="your-secret-here" to .env.local
@@ -21,7 +21,7 @@ async function testWebhook(toEmail) {
 
   console.log(`Sending simulated inbound email to: ${toEmail}`);
   console.log(`Webhook URL: ${LOCAL_URL}/api/webhooks/inbound-email?secret=${SECRET}`);
-  
+
   try {
     const res = await fetch(`${LOCAL_URL}/api/webhooks/inbound-email?secret=${SECRET}`, {
       method: 'POST',
@@ -32,7 +32,7 @@ async function testWebhook(toEmail) {
     const result = await res.text();
     console.log(`\nStatus: ${res.status}`);
     console.log(`Response: ${result}`);
-    
+
     if (res.ok) {
       console.log('✅ Webhook received by the server! Check your database/logs to see if the notification was processed and SMS was queued.');
     } else if (res.status === 401) {
