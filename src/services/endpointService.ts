@@ -243,7 +243,9 @@ export async function createEndpoint({
 export async function processInboundEmail(formEntries: Record<string, string>) {
   const supabase = getAdminClient();
   const to = formEntries['to'] || '';
-  const localPart = to.split('@')[0].toLowerCase();
+  const emailMatch = to.match(/<([^>]+)>/);
+  const rawEmail = emailMatch ? emailMatch[1] : to;
+  const localPart = rawEmail.split('@')[0].toLowerCase().trim();
   const subject = formEntries['subject'] || '(No Subject)';
   const textBody = formEntries['text'] || formEntries['html'] || '';
   const messageId = formEntries['Message-ID'] || formEntries['headers']?.match(/Message-ID:\s*<([^>]+)>/i)?.[1] || '';
