@@ -33,21 +33,37 @@ export async function processSmsFanout(job: Job) {
   }
   
   // 3. Fetch EndpointRecipients
-  const { data: endpointRecipients } = await supabase
+  const { data: rawEndpointRecipients } = await supabase
     .from('EndpointRecipient')
-    .select('*, recipient:PhoneRecipient(*)')
+    .select('*')
     .eq('endpointId', endpoint.id);
     
-  if (!endpointRecipients) {
-    throw new Error(`Failed to fetch recipients for endpoint ${endpoint.id}.`);
+  if (!rawEndpointRecipients || rawEndpointRecipients.length === 0) {
+    console.log(`No recipients mapped for endpoint ${endpoint.id}.`);
+    return;
   }
+
+  // 4. Fetch PhoneRecipients manually
+  const recipientIds = rawEndpointRecipients.map((er: any) => er.recipientId).filter(Boolean);
+  let phoneRecipients: any[] = [];
+  if (recipientIds.length > 0) {
+    const { data: prData } = await supabase.from('PhoneRecipient').select('*').in('id', recipientIds);
+    phoneRecipients = prData || [];
+  }
+  
+  const prMap = new Map(phoneRecipients.map(pr => [pr.id, pr]));
+  
+  const endpointRecipients = rawEndpointRecipients.map((er: any) => ({
+    ...er,
+    recipient: prMap.get(er.recipientId) || null
+  }));
 
   // Inject back for the rest of the function
   notification.endpoint = endpoint;
   notification.endpoint.recipients = endpointRecipients;
 
   const activeRecipients = notification.endpoint.recipients.filter(
-    (er: any) => !er.recipient.optedOut
+    (er: any) => er.recipient && !er.recipient.optedOut
   );
 
   if (activeRecipients.length === 0) {
