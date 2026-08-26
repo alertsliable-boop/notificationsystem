@@ -214,7 +214,7 @@ export default function HomePage() {
             <span className="font-bold tracking-tight text-sm">Liable Alerts</span>
           </div>
           <div className="flex gap-6 text-[13px] text-[#6B7280] font-medium">
-            <a href="#" className="hover:text-black transition-colors">Privacy</a>
+            <Link href="/privacy-policy" className="hover:text-black transition-colors">Privacy</Link>
             <a href="#" className="hover:text-black transition-colors">Terms</a>
             <a href="mailto:hello@liablealerts.com" className="hover:text-black transition-colors">Contact</a>
           </div>

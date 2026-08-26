@@ -13,7 +13,8 @@ export default function RegisterPage() {
     name: '',
     email: '',
     password: '',
-    companyName: ''
+    companyName: '',
+    smsConsent: false
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -52,7 +53,8 @@ export default function RegisterPage() {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   return (
@@ -172,6 +174,21 @@ export default function RegisterPage() {
               helperText="Must be at least 8 characters long"
             />
 
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="smsConsent"
+                name="smsConsent"
+                checked={formData.smsConsent}
+                onChange={handleChange}
+                required
+                className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 flex-shrink-0"
+              />
+              <label htmlFor="smsConsent" className="text-sm text-gray-600 leading-relaxed">
+                I agree to receive SMS alerts and system notifications from Liable Alerts. I have read and agree to the <Link href="/privacy-policy" className="text-blue-600 hover:underline">Privacy Policy</Link>. Message and data rates may apply. Reply STOP to cancel.
+              </label>
+            </div>
+
             <div className="pt-2">
               <Button
                 type="submit"
@@ -199,7 +216,7 @@ export default function RegisterPage() {
               By creating an account, you agree to our{' '}
               <Link href="/terms" className="text-blue-600 hover:underline">Terms of Service</Link>
               {' '}and{' '}
-              <Link href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>
+              <Link href="/privacy-policy" className="text-blue-600 hover:underline">Privacy Policy</Link>
             </p>
           </div>
         </div>
