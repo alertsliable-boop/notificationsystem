@@ -17,7 +17,7 @@ export default withAuth(
       authorized({ token, req }) {
         const { pathname } = req.nextUrl;
         // Public routes — always allow
-        const publicRoutes = ['/login', '/register', '/api/auth', '/api/health', '/api/webhooks', '/_next', '/favicon'];
+        const publicRoutes = ['/login', '/register', '/api/auth', '/api/health', '/api/webhooks', '/_next', '/favicon', '/terms', '/privacy-policy'];
         if (publicRoutes.some((r) => pathname.startsWith(r))) return true;
         // Marketing routes
         if (pathname === '/') return true;
