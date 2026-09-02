@@ -42,10 +42,10 @@ export default async function BillingPage() {
   const isOverLimit = currentActive > maxEndpoints;
 
   const getFeatures = (code: string, max: number) => {
-    if (code === 'starter') return [`Up to ${max} Active Email Endpoints`, 'Unlimited SMS Recipients', 'Full Delivery Logs & Audit Trails', 'Standard Email Support', 'Basic Alert Analytics'];
-    if (code === 'pro') return [`Up to ${max} Active Email Endpoints`, 'Unlimited SMS Recipients', 'Full Delivery Logs & Audit Trails', 'Priority Support', 'Advanced Alert Analytics', 'API & Webhooks Access'];
-    if (code === 'business') return [`Up to ${max} Active Email Endpoints`, 'Unlimited SMS Recipients', 'Full Delivery Logs & Audit Trails', '24/7 Dedicated Support', 'Multi-site Management', 'Custom Email Domains', 'SLA Guarantees'];
-    return [`${max}+ Custom Active Email Endpoints`, 'Dedicated SMS Gateways', 'Unlimited Team Members', 'Enterprise SLA & Compliance', 'Custom Integrations', 'Dedicated Account Manager'];
+    if (code === 'starter') return [`${max} Active Email Endpoint`, '100 SMS messages/mo', 'Up to 10 SMS recipients', 'Full Delivery Logs & Audit Trails'];
+    if (code === 'pro') return [`Up to ${max} Active Email Endpoints`, '100 SMS messages/mo per endpoint', 'Up to 10 SMS recipients per endpoint', 'Full Delivery Logs & Priority Support'];
+    if (code === 'business') return [`Up to ${max} Active Email Endpoints`, '100 SMS messages/mo per endpoint', 'Up to 10 SMS recipients per endpoint', '24/7 Dedicated Support & Custom Domains'];
+    return [`${max}+ Custom Active Email Endpoints`, 'Custom SMS volume', 'Unlimited recipients', 'Enterprise SLA & Compliance'];
   };
 
   const PLANS = dbPlans.map((p: any) => ({

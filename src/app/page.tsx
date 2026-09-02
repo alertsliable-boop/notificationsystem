@@ -160,16 +160,32 @@ export default function HomePage() {
       {/* Pricing Minimal */}
       <section id="pricing" className="py-32 px-6 border-t border-[#E5E7EB]">
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-20">
+          <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">Transparent Pricing.</h2>
-            <p className="text-lg text-[#6B7280]">Pay for active endpoints. Infinite recipients.</p>
+            <p className="text-lg text-[#6B7280]">Subscriptions based on total alarm email endpoints. Strictly metered usage.</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-[#0A0A0A] to-[#1A1A1A] rounded-2xl p-8 md:p-10 mb-10 text-white flex flex-col md:flex-row items-center justify-between shadow-2xl border border-neutral-800">
+            <div className="mb-6 md:mb-0 max-w-xl text-center md:text-left">
+              <div className="inline-flex items-center gap-2 bg-white/10 text-white text-[11px] font-bold px-3 py-1 rounded-full mb-4 uppercase tracking-widest border border-white/10">
+                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                Zero Risk
+              </div>
+              <h3 className="text-2xl md:text-3xl font-bold mb-3 tracking-tight">Try Liable Alerts completely free.</h3>
+              <p className="text-neutral-400 text-sm md:text-base leading-relaxed">
+                Start with a <strong>7-day free trial</strong> to test the platform. Includes exactly <strong>1 endpoint</strong>, <strong>10 total SMS messages</strong>, and up to <strong>2 recipients</strong>. No credit card required to start.
+              </p>
+            </div>
+            <Link href="/register" className="w-full md:w-auto text-center whitespace-nowrap bg-white text-black px-8 py-4 rounded-full font-bold hover:bg-neutral-200 transition-colors shadow-lg hover:scale-105 active:scale-95 duration-200">
+              Start Free Trial
+            </Link>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { name: 'Starter', price: '29', endpoints: 5, highlight: false },
-              { name: 'Pro', price: '99', endpoints: 25, highlight: true },
-              { name: 'Business', price: '299', endpoints: 100, highlight: false },
+              { name: 'Starter', price: '19', endpoints: 1, highlight: false },
+              { name: 'Professional', price: '59', endpoints: 5, highlight: true },
+              { name: 'Business', price: '129', endpoints: 15, highlight: false },
             ].map((plan) => (
               <div key={plan.name} className={`relative p-8 rounded-2xl border ${plan.highlight ? 'bg-black text-white border-black shadow-2xl' : 'bg-white border-[#E5E7EB]'}`}>
                 {plan.highlight && (
@@ -185,15 +201,15 @@ export default function HomePage() {
                 <div className="space-y-4 mb-8">
                   <div className="flex items-center gap-3 text-sm">
                     <CheckCircle2 className={`w-4 h-4 ${plan.highlight ? 'text-white' : 'text-black'}`} />
-                    <span><strong>{plan.endpoints}</strong> Active Endpoints</span>
+                    <span><strong>{plan.endpoints}</strong> Active {plan.endpoints === 1 ? 'Endpoint' : 'Endpoints'}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <CheckCircle2 className={`w-4 h-4 ${plan.highlight ? 'text-white' : 'text-black'}`} />
-                    <span>Unlimited SMS Volume</span>
+                    <span><strong>100</strong> SMS / endpoint / mo</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <CheckCircle2 className={`w-4 h-4 ${plan.highlight ? 'text-white' : 'text-black'}`} />
-                    <span>Full Audit Logs</span>
+                    <span>Up to <strong>10</strong> recipients / endpoint</span>
                   </div>
                 </div>
                 <Link href="/register"
@@ -202,6 +218,70 @@ export default function HomePage() {
                 </Link>
               </div>
             ))}
+          </div>
+
+          {/* Detailed Pricing Policies - Premium UI */}
+          <div className="mt-24 pt-16 border-t border-[#E5E7EB]/60">
+            <div className="text-center mb-16">
+              <h3 className="text-3xl font-bold tracking-tight mb-4">How it all works together</h3>
+              <p className="text-[#6B7280] max-w-2xl mx-auto">Everything you need to know about combining plans, overage, and message routing.</p>
+            </div>
+            
+            <div className="grid lg:grid-cols-2 gap-12 max-w-4xl mx-auto">
+              {/* Left Column: Combining & Scaling */}
+              <div className="space-y-10">
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0 mt-1">
+                    <Cpu className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-gray-900 mb-2">Combining Plans & Sites</h4>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                      Need 22 endpoints? Combine a Business plan (15), a Professional plan (5), and 2 Additional Endpoints under one company account. All endpoints merge into one single allowance that you can distribute across any number of sites.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0 mt-1">
+                    <Zap className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-gray-900 mb-2">Smart Upgrades</h4>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                      Additional endpoints cost <strong>$12/month</strong> each. We actively monitor your usage and will recommend upgrading when a larger plan becomes cheaper than paying for add-ons.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Limits & Overage */}
+              <div className="space-y-10">
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center flex-shrink-0 mt-1">
+                    <Activity className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-gray-900 mb-2">Strictly Metered Limits</h4>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                      Each endpoint gets exactly <strong>100 SMS/month</strong>. Messages are <em>not</em> pooled between endpoints. If one alarm goes to 10 recipients, that counts as 10 messages used against that endpoint's quota.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-green-50 border border-green-100 flex items-center justify-center flex-shrink-0 mt-1">
+                    <ShieldCheck className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-gray-900 mb-2">Overage & Continuity</h4>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                      Never miss an alarm. If you exceed 100 messages, paid accounts continue sending via metered billing at just <strong>$0.05 per additional SMS</strong>. Unused messages reset monthly and do not roll over.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -215,7 +295,7 @@ export default function HomePage() {
           </div>
           <div className="flex gap-6 text-[13px] text-[#6B7280] font-medium">
             <Link href="/privacy-policy" className="hover:text-black transition-colors">Privacy</Link>
-            <a href="#" className="hover:text-black transition-colors">Terms</a>
+            <Link href="/terms" className="hover:text-black transition-colors">Terms</Link>
             <a href="mailto:hello@liablealerts.com" className="hover:text-black transition-colors">Contact</a>
           </div>
         </div>

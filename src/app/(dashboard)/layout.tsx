@@ -6,9 +6,11 @@ import { redirect } from 'next/navigation';
 import { Zap, LogOut, Mail } from 'lucide-react';
 import { MainSidebarNav, SettingsSidebarNav } from './SidebarNav';
 import PageTransition from '@/components/PageTransition';
+import SignOutButton from '@/components/SignOutButton';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
+
   
   // Ensure session and user ID exist, otherwise redirect
   if (!session || !session.user || !session.user.id) {
@@ -117,13 +119,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <p className="text-[11px] text-gray-400 truncate">{session.user?.email}</p>
             </div>
           </div>
-          <Link
-            href="/api/auth/signout?callbackUrl=/"
-            className="flex items-center justify-center gap-2 w-full text-[12px] text-gray-500 hover:text-gray-700 font-medium px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors mt-1"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Sign Out
-          </Link>
+          <SignOutButton />
         </div>
       </aside>
 
