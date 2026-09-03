@@ -11,7 +11,7 @@ import { SwitchPlanButton } from './PlanManager';
 
 export const metadata = { title: 'Billing & Subscription Plans | Liable Alerts' };
 
-export default async function BillingPage() {
+export default async function BillingPage({ searchParams }: { searchParams: { status?: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/login');
 
@@ -56,6 +56,26 @@ export default async function BillingPage() {
 
   return (
     <div className="space-y-[60px] animate-fadeIn max-w-5xl py-8">
+      {/* Success/Cancel Banners */}
+      {(searchParams.status === 'success' || searchParams.status === 'updated') && (
+        <div className="p-4 mb-8 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3 animate-fadeIn">
+          <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h3 className="font-semibold text-green-900">Subscription Updated Successfully!</h3>
+            <p className="text-green-700 text-sm mt-1">Your subscription plan has been successfully modified. If you downgraded, the billing change will take effect at the end of your current cycle.</p>
+          </div>
+        </div>
+      )}
+      {searchParams.status === 'cancelled' && (
+        <div className="p-4 mb-8 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 animate-fadeIn">
+          <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h3 className="font-semibold text-amber-900">Checkout Cancelled</h3>
+            <p className="text-amber-700 text-sm mt-1">Your payment was cancelled. Your current subscription plan remains unchanged.</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <h1 className="text-[36px] font-serif font-normal text-ink-black leading-none">Billing & Subscription Plans</h1>

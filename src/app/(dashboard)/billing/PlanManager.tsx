@@ -66,7 +66,7 @@ export function SwitchPlanButton({ planCode, planName, currentPrice, newPrice, i
       if (json.url) {
         window.location.href = json.url;
       } else {
-        window.location.reload();
+        window.location.href = '/billing?status=updated';
       }
     } catch (err: any) {
       alert(err.message || 'An error occurred while switching plans');

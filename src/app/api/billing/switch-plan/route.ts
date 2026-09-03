@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, isUnauthorizedResponse, auditLog } from '@/lib/rbac';
 import { getAdminClient } from '@/lib/supabase';
+import { stripe, isStripeConfigured } from '@/lib/stripe';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -110,7 +111,6 @@ export async function POST(req: Request) {
       .single();
 
     // Check if Stripe is configured
-    const { stripe, isStripeConfigured } = await import('@/lib/stripe');
     if (!isStripeConfigured()) {
       return NextResponse.json({ error: 'Stripe is not configured in this environment.' }, { status: 500 });
     }
@@ -121,7 +121,55 @@ export async function POST(req: Request) {
 
     const origin = req.headers.get('origin') || 'http://localhost:3000';
 
-    // Create Stripe Checkout Session
+    // Check if the user already has a real Stripe Subscription
+    const { data: currentSub } = await supabase
+      .from('CompanySubscription')
+      .select('*, plan:SubscriptionPlan(*)')
+      .eq('companyId', ctx.companyId)
+      .single();
+
+    if (currentSub?.stripeSubscriptionId && !currentSub.stripeSubscriptionId.startsWith('mock_')) {
+      try {
+        const stripeSub = await stripe.subscriptions.retrieve(currentSub.stripeSubscriptionId);
+        
+        if (stripeSub.status === 'active' || stripeSub.status === 'trialing') {
+          const subItemId = stripeSub.items.data[0].id;
+          
+          // If the new plan is more expensive, invoice immediately. Otherwise (downgrade), just update it for the next billing cycle.
+          const isUpgrade = newPlan.priceCents > (currentSub.plan?.priceCents || 0);
+          
+          await stripe.subscriptions.update(stripeSub.id, {
+            items: [{ id: subItemId, price: newPlan.stripePriceId }],
+            proration_behavior: isUpgrade ? 'always_invoice' : 'none',
+            metadata: {
+              planCode: newPlan.code,
+              planId: newPlan.id
+            }
+          });
+          
+          // Immediately update database so UI reflects new plan limits instantly
+          const { data: updatedSub } = await supabase
+            .from('CompanySubscription')
+            .update({ planId: newPlan.id })
+            .eq('id', currentSub.id)
+            .select('*, plan:SubscriptionPlan(*)')
+            .single();
+
+          await auditLog(ctx, 'SWITCH_PLAN', 'CompanySubscription', currentSub.id, {
+            planCode: newPlan.code,
+            isUpgrade,
+            action: 'updated_existing_stripe_subscription'
+          });
+
+          return NextResponse.json({ success: true, data: updatedSub });
+        }
+      } catch (err) {
+        console.error('Error updating existing Stripe subscription:', err);
+        // Fall back to creating a new checkout session if the retrieval/update fails (e.g. deleted subscription)
+      }
+    }
+
+    // Otherwise, create a NEW Stripe Checkout Session for payment
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       managed_payments: { enabled: false },
