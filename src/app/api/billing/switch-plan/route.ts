@@ -172,7 +172,6 @@ export async function POST(req: Request) {
     // Otherwise, create a NEW Stripe Checkout Session for payment
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      managed_payments: { enabled: false },
       line_items: [
         {
           price: newPlan.stripePriceId,

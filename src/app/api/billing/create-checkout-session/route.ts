@@ -56,7 +56,6 @@ export async function POST(req: Request) {
     // Create Stripe Checkout session
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      managed_payments: { enabled: false },
       line_items: [
         {
           price: plan.stripePriceId,
