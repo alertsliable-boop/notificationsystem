@@ -74,7 +74,7 @@ export default function HomePage() {
       </section>
 
       {/* Clean Dashboard Preview / App Interface Teaser */}
-      <section className="pb-32 px-6">
+      <section id="how-it-works" className="pb-32 px-6">
         <div className="max-w-6xl mx-auto bg-white rounded-2xl border border-[#E5E7EB] shadow-2xl overflow-hidden flex flex-col md:flex-row">
           <div className="flex-1 p-10 md:p-16 border-b md:border-b-0 md:border-r border-[#E5E7EB]">
             <div className="w-12 h-12 bg-[#F3F4F6] rounded-xl flex items-center justify-center mb-6">

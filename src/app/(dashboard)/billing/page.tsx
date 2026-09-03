@@ -33,7 +33,7 @@ export default async function BillingPage() {
     supabase.from('SubscriptionPlan').select('*').order('priceCents', { ascending: true })
   ]);
   
-  const dbPlans = dbPlansData || [];
+  const dbPlans = (dbPlansData || []).filter((p: any) => p.code !== 'free_trial');
 
   const currentPlanCode = subscription?.plan?.code;
   const maxEndpoints = subscription?.plan?.maxActiveEndpoints ?? 5;

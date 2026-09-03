@@ -55,19 +55,11 @@ export async function POST(req: Request) {
 
     // Create Stripe Checkout session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
       mode: 'subscription',
+      managed_payments: { enabled: false },
       line_items: [
         {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `Liable Alerts — ${plan.name} Plan`,
-              description: `Includes up to ${plan.maxActiveEndpoints} active inbound email endpoints.`,
-            },
-            unit_amount: plan.priceCents,
-            recurring: { interval: 'month' },
-          },
+          price: plan.stripePriceId,
           quantity: 1,
         },
       ],

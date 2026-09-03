@@ -66,11 +66,11 @@ export async function POST(req: Request) {
         role: 'OWNER',
       });
 
-    // Assign a default free plan
+    // Assign the Free Trial plan
     const { data: defaultPlan } = await supabase
       .from('SubscriptionPlan')
       .select('*')
-      .eq('maxActiveEndpoints', 5)
+      .eq('code', 'free_trial')
       .limit(1)
       .single();
 
@@ -80,7 +80,8 @@ export async function POST(req: Request) {
         .insert({
           companyId: company.id,
           planId: defaultPlan.id,
-          status: 'ACTIVE',
+          status: 'TRIALING',
+          currentPeriodEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days trial
         });
     }
 

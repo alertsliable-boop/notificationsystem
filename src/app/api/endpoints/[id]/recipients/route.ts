@@ -65,6 +65,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .single();
 
     if (!link) {
+      // Get the company subscription to check plan limits
+      const { data: subscription } = await supabase
+        .from('CompanySubscription')
+        .select('plan:SubscriptionPlan(*)')
+        .eq('companyId', ctx.companyId)
+        .single();
+        
+      const maxRecipients = subscription?.plan?.code === 'free_trial' ? 2 : 10;
+
+      // Enforce recipient limit
+      const { count } = await supabase
+        .from('EndpointRecipient')
+        .select('*', { count: 'exact', head: true })
+        .eq('endpointId', endpointId);
+        
+      if (count !== null && count >= maxRecipients) {
+        return NextResponse.json({ error: `Maximum of ${maxRecipients} recipients allowed per endpoint on your current plan. Please upgrade or remove existing recipients.` }, { status: 403 });
+      }
+
       await supabase
         .from('EndpointRecipient')
         .insert({

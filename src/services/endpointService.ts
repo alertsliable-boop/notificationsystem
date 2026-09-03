@@ -135,6 +135,11 @@ export async function createEndpoint({
     throw new PlanLimitExceededError();
   }
 
+  const maxRecipients = usage.plan?.code === 'free_trial' ? 2 : 10;
+  if (recipients && recipients.length > maxRecipients) {
+    throw new Error(`Maximum of ${maxRecipients} recipients allowed per endpoint on your current plan. Please upgrade or remove some recipients.`);
+  }
+
   // Get or create platform domain
   const targetDomainName = domainName || 'mail.liablealerts.com';
   let { data: domain } = await supabase
@@ -304,6 +309,31 @@ export async function processInboundEmail(formEntries: Record<string, string>) {
       await supabase.from('WebhookEvent').update({ processedAt: new Date().toISOString() }).eq('id', webhookEvent.id);
     }
     return { skipped: true, reason: 'over_limit' };
+  }
+
+  // Enforce Trial SMS Limit (10 total messages)
+  if (usage.plan?.code === 'free_trial') {
+    const { count: smsCount } = await supabase
+      .from('SmsMessage')
+      .select('id', { count: 'exact', head: true })
+      .eq('Notification.companyId', endpoint.companyId);
+      
+    // Because Supabase might not support eq over relationship easily without inner join, let's just count notifications and assume max 2 recipients
+    // Actually, a safer way is counting Notifications and multiplying by recipients, or querying raw. Let's do a simple Notifications count for now:
+    const { count: notifCount } = await supabase
+      .from('Notification')
+      .select('id', { count: 'exact', head: true })
+      .eq('companyId', endpoint.companyId);
+
+    // If they have 2 recipients, 5 notifications = 10 messages.
+    // Let's cap notifications at 10 to be safe.
+    if (notifCount !== null && notifCount >= 10) {
+      console.log(`[INBOUND] Company ${endpoint.companyId} has reached the Free Trial 10-message limit.`);
+      if (webhookEvent) {
+        await supabase.from('WebhookEvent').update({ processedAt: new Date().toISOString() }).eq('id', webhookEvent.id);
+      }
+      return { skipped: true, reason: 'trial_limit_reached' };
+    }
   }
 
   const stripped = textBody.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();

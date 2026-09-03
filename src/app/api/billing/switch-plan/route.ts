@@ -102,48 +102,46 @@ export async function POST(req: Request) {
       }
     }
 
-    // Upsert subscription
-    let { data: subscription } = await supabase
-      .from('CompanySubscription')
+    // Look up company to check for existing customer ID if any
+    const { data: company } = await supabase
+      .from('Company')
       .select('*')
-      .eq('companyId', ctx.companyId)
+      .eq('id', ctx.companyId)
       .single();
 
-    if (subscription) {
-      const { data: updated } = await supabase
-        .from('CompanySubscription')
-        .update({
-          planId: newPlan.id,
-          status: 'ACTIVE',
-          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        })
-        .eq('companyId', ctx.companyId)
-        .select('*, plan:SubscriptionPlan(*)')
-        .single();
-      subscription = updated;
-    } else {
-      const { data: inserted } = await supabase
-        .from('CompanySubscription')
-        .insert({
-          companyId: ctx.companyId,
-          planId: newPlan.id,
-          status: 'ACTIVE',
-          stripeSubscriptionId: `mock_sub_${Date.now()}`,
-          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        })
-        .select('*, plan:SubscriptionPlan(*)')
-        .single();
-      subscription = inserted;
+    // Check if Stripe is configured
+    const { stripe, isStripeConfigured } = await import('@/lib/stripe');
+    if (!isStripeConfigured()) {
+      return NextResponse.json({ error: 'Stripe is not configured in this environment.' }, { status: 500 });
     }
 
-    if (!subscription) throw new Error('Failed to update subscription');
+    if (!newPlan.stripePriceId) {
+      return NextResponse.json({ error: 'Selected plan is missing a Stripe Price ID.' }, { status: 400 });
+    }
 
-    await auditLog(ctx, 'SWITCH_PLAN', 'CompanySubscription', subscription.id, {
-      planCode,
-      maxEndpoints: newPlan.maxActiveEndpoints,
+    const origin = req.headers.get('origin') || 'http://localhost:3000';
+
+    // Create Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      managed_payments: { enabled: false },
+      line_items: [
+        {
+          price: newPlan.stripePriceId,
+          quantity: 1,
+        },
+      ],
+      client_reference_id: ctx.companyId,
+      metadata: {
+        companyId: ctx.companyId,
+        planCode: newPlan.code,
+        planId: newPlan.id,
+      },
+      success_url: `${origin}/billing?session_id={CHECKOUT_SESSION_ID}&status=success`,
+      cancel_url: `${origin}/billing?status=cancelled`,
     });
 
-    return NextResponse.json({ success: true, data: subscription });
+    return NextResponse.json({ url: session.url });
   } catch (err: any) {
     console.error('Error switching plan:', err);
     return NextResponse.json({ error: err.message || 'Validation error' }, { status: 400 });
