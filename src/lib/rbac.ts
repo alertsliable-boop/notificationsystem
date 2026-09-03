@@ -15,13 +15,12 @@ export interface AuthContext {
   role: Role;
 }
 
-/**
- * Get the current authenticated user's company context.
- * Returns null if not authenticated or no membership found.
- */
-export async function getAuthContext(): Promise<AuthContext | null> {
+export async function getAuthContext(): Promise<AuthContext | { error: string, details?: any }> {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) { console.error("No session found in getAuthContext"); return null; }
+  if (!session?.user?.id) { 
+    console.error("No session found in getAuthContext"); 
+    return { error: 'No valid session. Please sign in again.' }; 
+  }
 
   const supabase = getAdminClient();
   const { data: membership, error } = await supabase
@@ -32,7 +31,15 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     .limit(1)
     .single();
 
-  if (error || !membership) return null;
+  if (error) {
+    console.error("Supabase error in getAuthContext:", error);
+    return { error: 'Database error while fetching membership', details: error };
+  }
+  
+  if (!membership) {
+    console.error("No membership found in getAuthContext");
+    return { error: 'No membership found for your account.' };
+  }
 
   return {
     userId: session.user.id,
@@ -46,10 +53,10 @@ export async function getAuthContext(): Promise<AuthContext | null> {
  */
 export async function requireAuth(): Promise<AuthContext | NextResponse> {
   const ctx = await getAuthContext();
-  if (!ctx) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if ('error' in ctx) {
+    return NextResponse.json({ error: ctx.error, details: ctx.details }, { status: 401 });
   }
-  return ctx;
+  return ctx as AuthContext;
 }
 
 /**
