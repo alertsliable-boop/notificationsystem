@@ -11,9 +11,9 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function updatePlans() {
-  await supabase.from('SubscriptionPlan').update({ name: 'Starter', maxActiveEndpoints: 1, priceCents: 1900 }).eq('code', 'starter');
-  await supabase.from('SubscriptionPlan').update({ name: 'Professional', maxActiveEndpoints: 5, priceCents: 5900 }).eq('code', 'pro');
-  await supabase.from('SubscriptionPlan').update({ name: 'Business', maxActiveEndpoints: 15, priceCents: 12900 }).eq('code', 'business');
+  await supabase.from('SubscriptionPlan').upsert({ id: 'plan_starter', code: 'starter', name: 'Starter', maxActiveEndpoints: 1, priceCents: 1900 });
+  await supabase.from('SubscriptionPlan').upsert({ id: 'plan_pro', code: 'pro', name: 'Professional', maxActiveEndpoints: 5, priceCents: 5900 });
+  await supabase.from('SubscriptionPlan').upsert({ id: 'plan_business', code: 'business', name: 'Business', maxActiveEndpoints: 15, priceCents: 12900 });
   
   // Also insert the free trial if not exists
   await supabase.from('SubscriptionPlan').upsert({
