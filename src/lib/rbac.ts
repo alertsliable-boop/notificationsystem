@@ -27,13 +27,12 @@ export async function getAuthContext(): Promise<AuthContext | { error: string, d
     .from('Membership')
     .select('*')
     .eq('userId', session.user.id)
-    .order('id', { ascending: true })
     .limit(1)
     .single();
 
   if (error) {
     console.error("Supabase error in getAuthContext:", error);
-    return { error: 'Database error while fetching membership', details: error };
+    return { error: 'Database error while fetching membership: ' + (error.message || JSON.stringify(error)), details: error };
   }
   
   if (!membership) {

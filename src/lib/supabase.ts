@@ -428,7 +428,7 @@ class QueryBuilder<T = any> {
     return rows;
   }
 
-  async execute(): Promise<{ data: any; count: number | null; error: any }> {
+  async execute(retryCount = 0): Promise<{ data: any; count: number | null; error: any }> {
     const pool = getPool();
     const params: any[] = [];
 
@@ -549,6 +549,11 @@ class QueryBuilder<T = any> {
 
       return { data: null, count: null, error: null };
     } catch (err: any) {
+      if (retryCount < 1 && (err.message?.includes('terminat') || err.message?.includes('socket') || err.message?.includes('Connection') || err.message?.includes('timeout') || err.message?.includes('read ECONNRESET'))) {
+        console.warn(`[DB Stale Connection] Retrying query on ${this.tableName}...`);
+        globalPool = null;
+        return this.execute(retryCount + 1);
+      }
       console.error(`[DB Query Error on ${this.tableName}]`, err);
       return { data: null, count: null, error: { message: err.message, code: err.code } };
     }

@@ -57,7 +57,7 @@ export function SwitchPlanButton({ planCode, planName, currentPrice, newPrice, i
           return;
         }
 
-        alert(json.error || 'Failed to switch subscription plan');
+        alert(json.error + (json.details?.message ? ': ' + json.details.message : '') || 'Failed to switch subscription plan');
         setLoading(false);
         return;
       }
