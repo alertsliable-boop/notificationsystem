@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Phone, Plus, Trash2, Loader2, Search, CheckCircle2, XCircle, Copy, CheckCheck, Edit2 } from 'lucide-react';
 
 interface Recipient {
