@@ -8,12 +8,14 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   companyName: z.string().min(2),
+  phone: z.string().optional(),
+  smsConsent: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, email, password, companyName } = registerSchema.parse(body);
+    const { name, email, password, companyName, phone, smsConsent } = registerSchema.parse(body);
 
     const supabase = getAdminClient();
     const { data: existingUser } = await supabase
@@ -83,6 +85,28 @@ export async function POST(req: Request) {
           status: 'TRIALING',
           currentPeriodEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days trial
         });
+    }
+
+    if (phone && phone.trim()) {
+      let formattedPhone = phone.trim();
+      if (!formattedPhone.startsWith('+')) {
+        const cleaned = formattedPhone.replace(/\D/g, '');
+        if (cleaned.length === 10) {
+          formattedPhone = `+1${cleaned}`;
+        } else if (cleaned.length > 10) {
+          formattedPhone = `+${cleaned}`;
+        }
+      }
+
+      if (/^\+[1-9]\d{1,14}$/.test(formattedPhone)) {
+        await supabase
+          .from('PhoneRecipient')
+          .insert({
+            companyId: company.id,
+            phoneE164: formattedPhone,
+            label: `${name} (Admin)`,
+          });
+      }
     }
 
     return NextResponse.json({ success: true, userId: newUser.id });

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Building2, Mail, Lock, User, Loader2, Zap, CheckCircle2, Shield, Clock } from 'lucide-react';
+import { Building2, Mail, Lock, User, Phone, Loader2, Zap, CheckCircle2, Shield, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
@@ -14,6 +14,7 @@ export default function RegisterPage() {
     email: '',
     password: '',
     companyName: '',
+    phone: '',
     smsConsent: false
   });
   const [error, setError] = useState('');
@@ -174,6 +175,17 @@ export default function RegisterPage() {
               helperText="Must be at least 8 characters long"
             />
 
+            <Input
+              name="phone"
+              type="tel"
+              label="Mobile Phone Number (Optional - for SMS alerts)"
+              placeholder="+1 (555) 000-0000"
+              value={formData.phone}
+              onChange={handleChange}
+              icon={<Phone className="w-4 h-4 text-gray-400" />}
+              helperText="Optional. SMS notifications are not required to create an account or use our service."
+            />
+
             <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4 space-y-2">
               <div className="flex items-start gap-3">
                 <input
@@ -185,14 +197,14 @@ export default function RegisterPage() {
                   className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 flex-shrink-0 cursor-pointer"
                 />
                 <label htmlFor="smsConsent" className="text-xs text-gray-700 leading-relaxed cursor-pointer">
-                  I agree to receive recurring automated operational text messages from Liable Alerts, including building-system alarm, fault, and status notifications, at the mobile number provided. Message frequency varies based on alarm activity. Message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. View the{' '}
-                  <Link href="/terms" target="_blank" className="text-blue-600 underline hover:text-blue-800">Terms and Conditions</Link>
+                  (Optional) By providing your phone number and checking this box, you agree to receive recurring automated operational and system alarm alert text messages from Liable Alerts at the mobile number provided above. Message frequency varies. Msg & data rates may apply. Reply STOP to cancel, HELP for help. Consent is not a condition of purchase or account registration. View our{' '}
+                  <Link href="/terms" target="_blank" className="text-blue-600 underline hover:text-blue-800 font-medium">Terms and Conditions</Link>
                   {' '}and{' '}
-                  <Link href="/privacy" target="_blank" className="text-blue-600 underline hover:text-blue-800">Privacy Policy</Link>.
+                  <Link href="/privacy" target="_blank" className="text-blue-600 underline hover:text-blue-800 font-medium">Privacy Policy</Link>.
                 </label>
               </div>
               <p className="text-[11px] text-gray-500 pl-7">
-                Mobile information and SMS consent will not be sold or shared with third parties or affiliates for marketing or promotional purposes.
+                Mobile information and SMS consent will not be sold, rented, or shared with third parties or affiliates for marketing or promotional purposes.
               </p>
             </div>
 

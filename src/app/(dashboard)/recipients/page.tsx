@@ -18,6 +18,7 @@ export default function RecipientsPage() {
   const [showForm, setShowForm] = useState(false);
   const [phoneE164, setPhoneE164] = useState('');
   const [label, setLabel] = useState('');
+  const [consentGiven, setConsentGiven] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -68,6 +69,7 @@ export default function RecipientsPage() {
   const closeForm = () => {
     setPhoneE164(''); 
     setLabel(''); 
+    setConsentGiven(false);
     setShowForm(false); 
     setSaving(false);
     setEditingId(null);
@@ -150,15 +152,25 @@ export default function RecipientsPage() {
                 />
               </div>
             </div>
-            <div className="p-3.5 bg-blue-50/70 rounded-xl border border-blue-200 text-xs text-blue-950 leading-relaxed space-y-1.5">
-              <p>
-                <strong>SMS Consent Requirement:</strong> By adding this mobile number, you confirm that the recipient has provided prior, express, and voluntary consent to receive recurring automated operational text messages from Liable Alerts, including building-system alarm, fault, and status notifications. Message frequency varies based on alarm activity. Message and data rates may apply. Reply <strong>STOP</strong> to opt out or <strong>HELP</strong> for help. Consent is not a condition of purchase. View the{' '}
-                <Link href="/terms" target="_blank" className="text-blue-700 underline font-semibold">Terms and Conditions</Link>
-                {' '}and{' '}
-                <Link href="/privacy" target="_blank" className="text-blue-700 underline font-semibold">Privacy Policy</Link>.
-              </p>
-              <p className="text-[11px] text-blue-800 font-medium">
-                Mobile information and SMS consent will not be sold or shared with third parties or affiliates for marketing or promotional purposes.
+            <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4 space-y-2">
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="recipientConsent"
+                  required={!editingId}
+                  checked={consentGiven}
+                  onChange={(e) => setConsentGiven(e.target.checked)}
+                  className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 flex-shrink-0 cursor-pointer"
+                />
+                <label htmlFor="recipientConsent" className="text-xs text-gray-700 leading-relaxed cursor-pointer">
+                  I confirm that this recipient has provided prior express consent to receive recurring automated operational and system alarm alert text messages from Liable Alerts at this mobile number. Message frequency varies. Msg & data rates may apply. Reply STOP to cancel, HELP for help. View our{' '}
+                  <Link href="/terms" target="_blank" className="text-blue-600 underline hover:text-blue-800 font-medium">Terms and Conditions</Link>
+                  {' '}and{' '}
+                  <Link href="/privacy" target="_blank" className="text-blue-600 underline hover:text-blue-800 font-medium">Privacy Policy</Link>.
+                </label>
+              </div>
+              <p className="text-[11px] text-gray-500 pl-7">
+                Mobile information and SMS consent will not be sold, rented, or shared with third parties or affiliates for marketing or promotional purposes.
               </p>
             </div>
             <div className="flex gap-3 pt-1">
