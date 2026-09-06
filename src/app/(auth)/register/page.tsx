@@ -106,18 +106,18 @@ export default function RegisterPage() {
       </div>
 
       {/* Right Side - Registration Form */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
         <div className="w-full max-w-md">
-          <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center">
+          <div className="lg:hidden flex items-center gap-3 mb-6 sm:mb-8">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
               <Zap className="w-5 h-5 text-white" fill="currentColor" />
             </div>
             <span className="text-xl font-bold text-gray-900">Liable Alerts</span>
           </div>
 
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Create your account</h2>
-            <p className="text-gray-600">Start automating SMS alerts in minutes</p>
+          <div className="mb-6 sm:mb-8">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Create your account</h2>
+            <p className="text-sm sm:text-base text-gray-600">Start automating SMS alerts in minutes</p>
           </div>
 
           {error && (
@@ -126,7 +126,7 @@ export default function RegisterPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             <Input
               name="name"
               type="text"
@@ -174,19 +174,26 @@ export default function RegisterPage() {
               helperText="Must be at least 8 characters long"
             />
 
-            <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                id="smsConsent"
-                name="smsConsent"
-                checked={formData.smsConsent}
-                onChange={handleChange}
-                required
-                className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 flex-shrink-0"
-              />
-              <label htmlFor="smsConsent" className="text-sm text-gray-600 leading-relaxed">
-                I agree to receive SMS alerts and system notifications from Liable Alerts. I have read and agree to the <Link href="/privacy-policy" className="text-blue-600 hover:underline">Privacy Policy</Link>. Message and data rates may apply. Reply STOP to cancel.
-              </label>
+            <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4 space-y-2">
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="smsConsent"
+                  name="smsConsent"
+                  checked={formData.smsConsent}
+                  onChange={handleChange}
+                  className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 flex-shrink-0 cursor-pointer"
+                />
+                <label htmlFor="smsConsent" className="text-xs text-gray-700 leading-relaxed cursor-pointer">
+                  I agree to receive recurring automated operational text messages from Liable Alerts, including building-system alarm, fault, and status notifications, at the mobile number provided. Message frequency varies based on alarm activity. Message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. View the{' '}
+                  <Link href="/terms" target="_blank" className="text-blue-600 underline hover:text-blue-800">Terms and Conditions</Link>
+                  {' '}and{' '}
+                  <Link href="/privacy" target="_blank" className="text-blue-600 underline hover:text-blue-800">Privacy Policy</Link>.
+                </label>
+              </div>
+              <p className="text-[11px] text-gray-500 pl-7">
+                Mobile information and SMS consent will not be sold or shared with third parties or affiliates for marketing or promotional purposes.
+              </p>
             </div>
 
             <div className="pt-2">
@@ -214,9 +221,9 @@ export default function RegisterPage() {
           <div className="mt-8 pt-6 border-t border-gray-200">
             <p className="text-xs text-gray-500 text-center">
               By creating an account, you agree to our{' '}
-              <Link href="/terms" className="text-blue-600 hover:underline">Terms of Service</Link>
+              <Link href="/terms" className="text-blue-600 hover:underline">Terms and Conditions</Link>
               {' '}and{' '}
-              <Link href="/privacy-policy" className="text-blue-600 hover:underline">Privacy Policy</Link>
+              <Link href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>
             </p>
           </div>
         </div>

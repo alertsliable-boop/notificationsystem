@@ -81,19 +81,19 @@ export default function LoginPage() {
       </div>
 
       {/* Right Side - Login Form */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
-          <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center">
+          <div className="lg:hidden flex items-center gap-3 mb-6 sm:mb-8">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
               <Zap className="w-5 h-5 text-white" fill="currentColor" />
             </div>
             <span className="text-xl font-bold text-gray-900">Liable Alerts</span>
           </div>
 
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome back</h2>
-            <p className="text-gray-600">Sign in to your account to continue</p>
+          <div className="mb-6 sm:mb-8">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Welcome back</h2>
+            <p className="text-sm sm:text-base text-gray-600">Sign in to your account to continue</p>
           </div>
 
           {error && (
@@ -102,7 +102,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
             <Input
               type="email"
               label="Email Address"
@@ -123,12 +123,12 @@ export default function LoginPage() {
               icon={<Lock className="w-4 h-4" />}
             />
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between text-xs sm:text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span className="text-sm text-gray-600">Remember me</span>
+                <span className="text-gray-600">Remember me</span>
               </label>
-              <Link href="/forgot-password" className="text-sm font-semibold text-blue-600 hover:text-blue-700">
+              <Link href="/forgot-password" className="font-semibold text-blue-600 hover:text-blue-700">
                 Forgot password?
               </Link>
             </div>
@@ -144,19 +144,19 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-8 text-center">
+          <div className="mt-6 sm:mt-8 text-center">
             <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <Link href="/register" className="font-semibold text-blue-600 hover:text-blue-700">
                 Start free trial
               </Link>
             </p>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <p className="text-xs text-gray-500 text-center">
+          <div className="mt-6 sm:mt-8 pt-6 border-t border-gray-200">
+            <p className="text-xs text-gray-500 text-center leading-relaxed">
               By signing in, you agree to our{' '}
-              <Link href="/terms" className="text-blue-600 hover:underline">Terms of Service</Link>
+              <Link href="/terms" className="text-blue-600 hover:underline">Terms and Conditions</Link>
               {' '}and{' '}
               <Link href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>
             </p>

@@ -55,42 +55,42 @@ export default async function BillingPage({ searchParams }: { searchParams: { st
   }));
 
   return (
-    <div className="space-y-[60px] animate-fadeIn max-w-5xl py-8">
+    <div className="space-y-8 sm:space-y-12 animate-fadeIn max-w-5xl py-4 sm:py-6">
       {/* Success/Cancel Banners */}
       {(searchParams.status === 'success' || searchParams.status === 'updated') && (
-        <div className="p-4 mb-8 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3 animate-fadeIn">
+        <div className="p-4 mb-6 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3 animate-fadeIn">
           <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
           <div>
-            <h3 className="font-semibold text-green-900">Subscription Updated Successfully!</h3>
-            <p className="text-green-700 text-sm mt-1">Your subscription plan has been successfully modified. If you downgraded, the billing change will take effect at the end of your current cycle.</p>
+            <h3 className="font-semibold text-green-900 text-sm">Subscription Updated Successfully!</h3>
+            <p className="text-green-700 text-xs sm:text-sm mt-1">Your subscription plan has been successfully modified. If you downgraded, the billing change will take effect at the end of your current cycle.</p>
           </div>
         </div>
       )}
       {searchParams.status === 'cancelled' && (
-        <div className="p-4 mb-8 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 animate-fadeIn">
+        <div className="p-4 mb-6 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 animate-fadeIn">
           <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
           <div>
-            <h3 className="font-semibold text-amber-900">Checkout Cancelled</h3>
-            <p className="text-amber-700 text-sm mt-1">Your payment was cancelled. Your current subscription plan remains unchanged.</p>
+            <h3 className="font-semibold text-amber-900 text-sm">Checkout Cancelled</h3>
+            <p className="text-amber-700 text-xs sm:text-sm mt-1">Your payment was cancelled. Your current subscription plan remains unchanged.</p>
           </div>
         </div>
       )}
 
       {/* Header */}
       <div>
-        <h1 className="text-[36px] font-serif font-normal text-ink-black leading-none">Billing & Subscription Plans</h1>
-        <p className="text-smoke mt-4 text-[16px] tracking-[-0.32px] leading-[1.35]">
+        <h1 className="text-2xl sm:text-[32px] font-bold text-ink-black leading-tight">Billing & Subscription Plans</h1>
+        <p className="text-smoke mt-1.5 text-sm sm:text-base tracking-[-0.32px] leading-relaxed">
           Manage your subscription tier based on active inbound email accounts
         </p>
       </div>
 
       {/* Quota Alert if Over Limit */}
       {isOverLimit && (
-        <div className="p-5 bg-red-50 border-2 border-red-200 rounded-2xl flex items-start gap-4">
-          <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+        <div className="p-4 sm:p-5 bg-red-50 border-2 border-red-200 rounded-2xl flex items-start gap-3 sm:gap-4">
+          <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
           <div>
-            <h3 className="font-bold text-red-900 text-[16px]">Active Account Limit Exceeded</h3>
-            <p className="text-red-700 text-[14px] mt-1">
+            <h3 className="font-bold text-red-900 text-sm sm:text-base">Active Account Limit Exceeded</h3>
+            <p className="text-red-700 text-xs sm:text-sm mt-1 leading-relaxed">
               Your company has <strong>{currentActive}</strong> active email accounts, which exceeds your current plan limit of <strong>{maxEndpoints}</strong>. Please upgrade your subscription plan or deactivate surplus endpoints to restore normal notification dispatching.
             </p>
           </div>
@@ -99,27 +99,29 @@ export default async function BillingPage({ searchParams }: { searchParams: { st
 
       {/* Current Usage Card */}
       <Card className="border-signal-blue/15 bg-signal-blue/5 shadow-subtle">
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between mb-6">
+        <CardContent className="p-5 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-signal-blue rounded-full flex items-center justify-center shadow-subtle-5">
+                <div className="w-10 h-10 bg-signal-blue rounded-full flex items-center justify-center shadow-subtle-5 flex-shrink-0">
                   <CreditCard className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <p className="text-[12px] font-medium text-smoke uppercase tracking-wider">Current Active Subscription</p>
-                  <h2 className="text-[24px] font-semibold text-ink-black tracking-[-0.48px] leading-tight">{subscription?.plan?.name ?? 'Starter'} Plan</h2>
+                  <h2 className="text-xl sm:text-[24px] font-semibold text-ink-black tracking-[-0.48px] leading-tight">{subscription?.plan?.name ?? 'Starter'} Plan</h2>
                 </div>
               </div>
             </div>
-            <Badge variant={subscription?.status === 'ACTIVE' ? 'success' : 'danger'}>
-              {subscription?.status ?? 'ACTIVE'}
-            </Badge>
+            <div className="self-start sm:self-auto">
+              <Badge variant={subscription?.status === 'ACTIVE' ? 'success' : 'danger'}>
+                {subscription?.status ?? 'ACTIVE'}
+              </Badge>
+            </div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <div className="flex justify-between text-[14px] mb-2 tracking-[-0.28px]">
+              <div className="flex justify-between text-sm mb-2 tracking-[-0.28px]">
                 <span className="font-medium text-graphite">Active Inbound Email Accounts</span>
                 <span className="font-bold text-ink-black">{currentActive} / {maxEndpoints}</span>
               </div>
@@ -137,13 +139,13 @@ export default async function BillingPage({ searchParams }: { searchParams: { st
               )}
             </div>
             
-            <div className="space-y-3 border-l border-ash-mist/40 md:pl-6">
-              <div className="flex items-center gap-2 text-[14px] tracking-[-0.28px]">
-                <Mail className="w-4 h-4 text-signal-blue" />
+            <div className="space-y-3 border-t pt-4 md:border-t-0 md:pt-0 md:border-l md:pl-6 border-ash-mist/40">
+              <div className="flex items-center gap-2 text-sm tracking-[-0.28px]">
+                <Mail className="w-4 h-4 text-signal-blue flex-shrink-0" />
                 <span className="text-graphite">Independent Endpoint Configuration</span>
               </div>
-              <div className="flex items-center gap-2 text-[14px] tracking-[-0.28px]">
-                <Clock className="w-4 h-4 text-signal-blue" />
+              <div className="flex items-center gap-2 text-sm tracking-[-0.28px]">
+                <Clock className="w-4 h-4 text-signal-blue flex-shrink-0" />
                 <span className="text-graphite">Real-time SMS Forwarding & Delivery Logs</span>
               </div>
             </div>
@@ -153,14 +155,14 @@ export default async function BillingPage({ searchParams }: { searchParams: { st
 
       {/* Pricing Plans */}
       <div>
-        <div className="text-center mb-12">
-          <h2 className="text-[28px] font-serif font-normal text-ink-black leading-none">Subscription Plans</h2>
-          <p className="text-smoke mt-4 text-[16px] tracking-[-0.32px]">
+        <div className="text-center mb-8 sm:mb-12">
+          <h2 className="text-2xl sm:text-[28px] font-bold text-ink-black leading-tight">Subscription Plans</h2>
+          <p className="text-smoke mt-2 text-sm sm:text-base tracking-[-0.32px]">
             Billed transparently based on active inbound email accounts
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {PLANS.map((plan: any) => {
             const isCurrent = plan.code === currentPlanCode;
             return (

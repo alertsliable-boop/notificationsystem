@@ -140,10 +140,10 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
       )}
 
       {/* Header Controls: Toggle Status + Copy Address */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <button
           onClick={handleCopyEmail}
-          className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-200 text-gray-700 text-[12px] font-semibold rounded-xl hover:bg-gray-50 transition-colors"
+          className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl hover:bg-gray-50 transition-colors"
         >
           {copied ? <CheckCheck className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
           {copied ? 'Copied!' : 'Copy Email Address'}
@@ -152,7 +152,7 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
         <button
           onClick={handleToggleStatus}
           disabled={toggling}
-          className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-xl border text-[13px] font-semibold transition-all disabled:opacity-50 ${
+          className={`inline-flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-1.5 rounded-xl border text-xs sm:text-[13px] font-semibold transition-all disabled:opacity-50 ${
             isActive
               ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
               : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
@@ -204,6 +204,9 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
                 className="w-full border border-purple-200 bg-white rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
+            <p className="text-[11px] text-purple-900/80 leading-relaxed">
+              Recipients must provide prior consent to receive operational alerts. Reply STOP to cancel or HELP for help. Mobile info & SMS consent will not be sold or shared for marketing purposes.
+            </p>
             <div className="flex justify-end gap-2">
               <button
                 type="button"

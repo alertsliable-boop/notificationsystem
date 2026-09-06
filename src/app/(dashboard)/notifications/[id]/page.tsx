@@ -90,8 +90,8 @@ export default async function NotificationDetailPage({
       </Link>
 
       {/* Header */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <div className="flex items-start justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -99,17 +99,17 @@ export default async function NotificationDetailPage({
               </div>
               <span className="text-[12px] font-semibold text-gray-400 uppercase tracking-wider">Notification</span>
             </div>
-            <h1 className="text-[22px] font-bold text-gray-900 leading-tight mb-1">
+            <h1 className="text-xl sm:text-[22px] font-bold text-gray-900 leading-tight mb-1 break-words">
               {notification.subject || '(No Subject)'}
             </h1>
-            <p className="text-[13px] text-gray-500">
+            <p className="text-xs sm:text-[13px] text-gray-500">
               Received {new Date(notification.receivedAt).toLocaleString('en-US', {
                 weekday: 'short', month: 'short', day: 'numeric',
                 year: 'numeric', hour: '2-digit', minute: '2-digit'
               })}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 self-start sm:self-auto">
             {notification.smsMessages.length > 0 && (
               <StatusBadge status={
                 notification.smsMessages.every((m: any) => m.status === 'DELIVERED') ? 'DELIVERED' :

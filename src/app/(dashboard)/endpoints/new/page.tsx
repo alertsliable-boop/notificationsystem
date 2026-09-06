@@ -208,7 +208,7 @@ export default function CreateEndpointPage() {
               <p className="text-xs text-gray-500 mt-1">Leave blank to auto-generate a unique prefix based on your label.</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Customer Assignment *</label>
                 <select value={customerId} onChange={(e) => { setCustomerId(e.target.value); setSiteId(''); }} required
@@ -229,7 +229,7 @@ export default function CreateEndpointPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Severity Tag</label>
                 <select value={severityTag} onChange={(e) => setSeverityTag(e.target.value)}
@@ -263,6 +263,7 @@ export default function CreateEndpointPage() {
           <div className="space-y-4">
             <h3 className="font-bold text-xs uppercase tracking-wider text-gray-400">2 · SMS Forwarding Recipients</h3>
             <p className="text-xs text-gray-600">Enter mobile numbers in E.164 format (e.g. <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-mono">+15551234567</code>)</p>
+            
             <div className="space-y-2.5">
               {recipients.map((r, i) => (
                 <div key={i} className="flex gap-2">
@@ -280,13 +281,27 @@ export default function CreateEndpointPage() {
                 </div>
               ))}
             </div>
+
             <button type="button" onClick={handleAddRecipient} className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-semibold py-1">
               <Plus className="w-4 h-4" /> Add another recipient number
             </button>
+
+            {/* Compliance callout */}
+            <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-[11px] text-blue-900 leading-relaxed space-y-1">
+              <p>
+                <strong>SMS Consent Requirement:</strong> By adding mobile recipient numbers, you confirm that recipients have provided prior, express consent to receive automated operational text messages from Liable Alerts. Message frequency varies. Msg & data rates may apply. Reply STOP to cancel or HELP for help. View the{' '}
+                <Link href="/terms" target="_blank" className="text-blue-700 underline font-semibold">Terms and Conditions</Link>
+                {' '}and{' '}
+                <Link href="/privacy" target="_blank" className="text-blue-700 underline font-semibold">Privacy Policy</Link>.
+              </p>
+              <p className="text-blue-800">
+                Mobile information and SMS consent will not be sold or shared with third parties or affiliates for marketing or promotional purposes.
+              </p>
+            </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <Link href="/endpoints" className="px-5 py-2.5 border border-gray-300 rounded-full text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-2">
+            <Link href="/endpoints" className="px-5 py-2.5 border border-gray-300 rounded-full text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors text-center">
               Cancel
             </Link>
             <button type="submit" disabled={isLoading || isAtLimit}

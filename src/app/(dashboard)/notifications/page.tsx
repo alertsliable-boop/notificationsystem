@@ -78,12 +78,12 @@ export default async function NotificationsPage({
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-[26px] font-bold text-gray-900 leading-tight">Notifications & SMS Logs</h1>
-          <p className="text-gray-500 text-[14px] mt-1">Full history of inbound alerts and their SMS delivery</p>
+          <h1 className="text-2xl sm:text-[26px] font-bold text-gray-900 leading-tight">Notifications & SMS Logs</h1>
+          <p className="text-gray-500 text-sm mt-1">Full history of inbound alerts and their SMS delivery</p>
         </div>
-        <div className="text-[13px] font-semibold text-gray-500 bg-white border border-gray-200 px-4 py-2 rounded-xl">
+        <div className="text-xs sm:text-[13px] font-semibold text-gray-500 bg-white border border-gray-200 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl self-start sm:self-auto shadow-2xs">
           {total.toLocaleString()} total
         </div>
       </div>

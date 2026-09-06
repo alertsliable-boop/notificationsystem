@@ -29,7 +29,7 @@ const settingsNavItems: NavItem[] = [
   { label: 'Settings', href: '/settings', icon: Settings },
 ];
 
-function SidebarNavList({ items }: { items: NavItem[] }) {
+function SidebarNavList({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
@@ -40,6 +40,7 @@ function SidebarNavList({ items }: { items: NavItem[] }) {
           <Link
             key={item.href}
             href={item.href}
+            onClick={onNavigate}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[13px] font-medium group ${
               isActive
                 ? 'bg-blue-50 text-blue-700 font-semibold'
@@ -62,10 +63,11 @@ function SidebarNavList({ items }: { items: NavItem[] }) {
   );
 }
 
-export function MainSidebarNav() {
-  return <SidebarNavList items={mainNavItems} />;
+export function MainSidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+  return <SidebarNavList items={mainNavItems} onNavigate={onNavigate} />;
 }
 
-export function SettingsSidebarNav() {
-  return <SidebarNavList items={settingsNavItems} />;
+export function SettingsSidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+  return <SidebarNavList items={settingsNavItems} onNavigate={onNavigate} />;
 }
+

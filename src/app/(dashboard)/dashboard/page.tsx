@@ -132,10 +132,10 @@ export default async function DashboardPage() {
       {/* Welcome Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-[28px] font-bold text-gray-900 leading-tight tracking-tight">
+          <h1 className="text-xl sm:text-2xl md:text-[28px] font-bold text-gray-900 leading-tight tracking-tight">
             Welcome back, {session.user?.name?.split(' ')[0] || 'User'} 👋
           </h1>
-          <p className="text-gray-500 mt-1 text-[14px]">
+          <p className="text-gray-500 mt-1 text-xs sm:text-sm">
             Here&apos;s what&apos;s happening with your alert platform.
           </p>
         </div>
@@ -162,7 +162,7 @@ export default async function DashboardPage() {
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {stats.map((stat, i) => (
           <Link
             key={stat.label}
@@ -269,7 +269,7 @@ export default async function DashboardPage() {
                   <Link
                     key={notif.id}
                     href={`/notifications/${notif.id}`}
-                    className="flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50 transition-colors group"
+                    className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 sm:py-3.5 hover:bg-gray-50 transition-colors group"
                   >
                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDot}`} />
                     <div className="flex-1 min-w-0">

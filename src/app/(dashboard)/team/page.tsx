@@ -62,31 +62,33 @@ export default async function TeamPage() {
             const role = roleConfig[m.role] || roleConfig.MEMBER;
             const isCurrentUser = m.userId === session.user.id;
             return (
-              <div key={m.id} className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-                {/* Avatar */}
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-[14px] flex-shrink-0">
-                  {(m.user.name || m.user.email).charAt(0).toUpperCase()}
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[14px] font-semibold text-gray-900">{m.user.name || 'Unknown'}</p>
-                    {isCurrentUser && (
-                      <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                        You
-                      </span>
-                    )}
+              <div key={m.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  {/* Avatar */}
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xs sm:text-[14px] flex-shrink-0">
+                    {(m.user.name || m.user.email).charAt(0).toUpperCase()}
                   </div>
-                  <p className="text-[12px] text-gray-400 flex items-center gap-1 mt-0.5">
-                    <Mail className="w-3 h-3" />
-                    {m.user.email}
-                  </p>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{m.user.name || 'Unknown'}</p>
+                      {isCurrentUser && (
+                        <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                          You
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5 truncate">
+                      <Mail className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{m.user.email}</span>
+                    </p>
+                  </div>
                 </div>
 
                 {/* Role Badge & Actions */}
-                <div className="flex items-center gap-3">
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[12px] font-semibold ${role.className}`}>
+                <div className="flex items-center justify-between sm:justify-end gap-3 pl-12 sm:pl-0">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold ${role.className}`}>
                     <role.icon className="w-3 h-3" />
                     {role.label}
                   </span>
@@ -112,7 +114,7 @@ export default async function TeamPage() {
           <Shield className="w-4 h-4 text-blue-600" />
           Role Permissions
         </h3>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {Object.entries(roleConfig).map(([key, r]) => (
             <div key={key} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold flex-shrink-0 ${r.className}`}>

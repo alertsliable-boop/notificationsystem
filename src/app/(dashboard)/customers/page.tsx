@@ -82,82 +82,84 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="space-y-[80px] max-w-5xl py-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 max-w-5xl py-4 sm:py-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-[36px] font-serif font-normal text-ink-black leading-none">Customers</h1>
-          <p className="text-smoke mt-4 text-[16px] tracking-[-0.32px] leading-[1.35]">Organize your inbound endpoints by customer.</p>
+          <h1 className="text-2xl sm:text-[32px] font-bold text-ink-black leading-tight">Customers</h1>
+          <p className="text-smoke mt-1 text-sm tracking-[-0.32px] leading-[1.35]">Organize your inbound endpoints by customer.</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 bg-signal-blue text-white px-[24px] py-[14px] rounded-[50px] font-semibold text-[16px] transition-colors">
-          <Plus className="w-5 h-5" /> Add Customer
+        <button onClick={() => setShowForm(!showForm)} className="inline-flex items-center justify-center gap-2 bg-signal-blue text-white px-5 py-2.5 rounded-full font-semibold text-sm transition-colors self-start sm:self-auto shadow-sm">
+          <Plus className="w-4 h-4" /> Add Customer
         </button>
       </div>
 
       <div className="space-y-6">
 
       {showForm && (
-        <div className="bg-paper-white rounded-[22px] shadow-subtle p-[24px] border border-ash-mist">
-          <h3 className="font-semibold mb-6 text-ink-black text-[18px] tracking-[-0.36px]">{editingId ? 'Edit Customer' : 'New Customer'}</h3>
-          {error && <div className="text-red-500 bg-red-50 p-3 rounded-lg text-[14px] mb-4">{error}</div>}
-          <form onSubmit={handleCreate} className="space-y-5">
+        <div className="bg-paper-white rounded-2xl shadow-subtle p-5 sm:p-6 border border-ash-mist">
+          <h3 className="font-semibold mb-5 text-ink-black text-base tracking-[-0.36px]">{editingId ? 'Edit Customer' : 'New Customer'}</h3>
+          {error && <div className="text-red-500 bg-red-50 p-3 rounded-lg text-sm mb-4">{error}</div>}
+          <form onSubmit={handleCreate} className="space-y-4">
             <div>
-              <label className="block text-[12px] font-medium text-smoke mb-1.5 tracking-[-0.24px]">Customer Name *</label>
-              <input required value={name} onChange={e => setName(e.target.value)} placeholder="Acme Corporation" className="w-full border border-ash-mist bg-paper-white rounded-[12px] px-4 py-2.5 text-[16px] text-graphite outline-none focus:ring-2 focus:ring-signal-blue/50 focus:border-signal-blue transition-all" />
+              <label className="block text-xs font-medium text-smoke mb-1.5 tracking-[-0.24px]">Customer Name *</label>
+              <input required value={name} onChange={e => setName(e.target.value)} placeholder="Acme Corporation" className="w-full border border-ash-mist bg-paper-white rounded-xl px-4 py-2.5 text-sm text-graphite outline-none focus:ring-2 focus:ring-signal-blue/50 focus:border-signal-blue transition-all" />
             </div>
             <div>
-              <label className="block text-[12px] font-medium text-smoke mb-1.5 tracking-[-0.24px]">Notes</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional notes..." className="w-full border border-ash-mist bg-paper-white rounded-[12px] px-4 py-2.5 text-[16px] text-graphite outline-none focus:ring-2 focus:ring-signal-blue/50 focus:border-signal-blue transition-all resize-none" rows={2} />
+              <label className="block text-xs font-medium text-smoke mb-1.5 tracking-[-0.24px]">Notes</label>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional notes..." className="w-full border border-ash-mist bg-paper-white rounded-xl px-4 py-2.5 text-sm text-graphite outline-none focus:ring-2 focus:ring-signal-blue/50 focus:border-signal-blue transition-all resize-none" rows={2} />
             </div>
-            <div className="flex gap-3 pt-2">
-              <button type="submit" disabled={saving} className="flex items-center gap-2 bg-signal-blue text-white px-[24px] py-[12px] rounded-[50px] font-semibold text-[14px] disabled:opacity-50 transition-opacity">
+            <div className="flex gap-3 pt-1">
+              <button type="submit" disabled={saving} className="flex items-center gap-2 bg-signal-blue text-white px-5 py-2.5 rounded-full font-semibold text-sm disabled:opacity-50 transition-opacity">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (editingId ? 'Save Changes' : 'Create Customer')}
               </button>
-              <button type="button" onClick={closeForm} className="px-[22px] py-[12px] bg-transparent border-[1.5px] border-ink-black text-ink-black rounded-[50px] font-medium text-[14px] hover:bg-ash-mist transition-colors">Cancel</button>
+              <button type="button" onClick={closeForm} className="px-5 py-2.5 bg-transparent border border-ink-black text-ink-black rounded-full font-medium text-sm hover:bg-ash-mist transition-colors">Cancel</button>
             </div>
           </form>
         </div>
       )}
 
-      <div className="bg-paper-white rounded-[22px] shadow-subtle overflow-hidden border border-ash-mist">
+      <div className="bg-paper-white rounded-2xl shadow-subtle overflow-hidden border border-ash-mist">
         {loading ? (
           <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-smoke" /></div>
         ) : customers.length === 0 ? (
-          <div className="flex flex-col items-center py-16 text-smoke gap-3">
+          <div className="flex flex-col items-center py-16 text-smoke gap-3 px-4 text-center">
             <Users className="w-12 h-12 text-smoke/40" />
-            <p className="text-[14px] tracking-[-0.28px]">No customers yet. Create one to get started.</p>
+            <p className="text-sm tracking-[-0.28px]">No customers yet. Create one to get started.</p>
           </div>
         ) : (
-          <table className="w-full text-left">
-            <thead className="bg-paper-white border-b border-ash-mist">
-              <tr>
-                <th className="px-6 py-4 text-[12px] font-medium text-smoke uppercase tracking-wider">Name</th>
-                <th className="px-6 py-4 text-[12px] font-medium text-smoke uppercase tracking-wider">Sites</th>
-                <th className="px-6 py-4 text-[12px] font-medium text-smoke uppercase tracking-wider">Endpoints</th>
-                <th className="px-6 py-4 text-[12px] font-medium text-smoke uppercase tracking-wider">Notes</th>
-                <th className="px-6 py-4 text-[12px] font-medium text-smoke uppercase tracking-wider text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ash-mist bg-paper-white">
-              {customers.map((c) => (
-                <tr key={c.id} className="hover:bg-ash-mist/50 transition-colors">
-                  <td className="px-6 py-5 text-[16px] font-medium text-ink-black tracking-[-0.32px]">{c.name}</td>
-                  <td className="px-6 py-5 text-[14px] text-graphite tracking-[-0.28px]">{c._count.sites}</td>
-                  <td className="px-6 py-5 text-[14px] text-graphite tracking-[-0.28px]">{c._count.endpoints}</td>
-                  <td className="px-6 py-5 text-[14px] text-smoke tracking-[-0.28px] max-w-xs truncate">{c.notes || '—'}</td>
-                  <td className="px-6 py-5 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => handleEdit(c)} className="p-2 text-smoke hover:text-signal-blue transition-colors">
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleDelete(c.id)} disabled={deletingId === c.id} className="p-2 text-smoke hover:text-red-500 transition-colors disabled:opacity-50">
-                        {deletingId === c.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left min-w-[600px]">
+              <thead className="bg-paper-white border-b border-ash-mist">
+                <tr>
+                  <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Name</th>
+                  <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Sites</th>
+                  <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Endpoints</th>
+                  <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Notes</th>
+                  <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-ash-mist bg-paper-white">
+                {customers.map((c) => (
+                  <tr key={c.id} className="hover:bg-ash-mist/50 transition-colors">
+                    <td className="px-6 py-4 text-sm font-semibold text-ink-black tracking-[-0.32px]">{c.name}</td>
+                    <td className="px-6 py-4 text-sm text-graphite tracking-[-0.28px]">{c._count.sites}</td>
+                    <td className="px-6 py-4 text-sm text-graphite tracking-[-0.28px]">{c._count.endpoints}</td>
+                    <td className="px-6 py-4 text-sm text-smoke tracking-[-0.28px] max-w-xs truncate">{c.notes || '—'}</td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => handleEdit(c)} className="p-2 text-smoke hover:text-signal-blue transition-colors">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDelete(c.id)} disabled={deletingId === c.id} className="p-2 text-smoke hover:text-red-500 transition-colors disabled:opacity-50">
+                          {deletingId === c.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
       </div>
