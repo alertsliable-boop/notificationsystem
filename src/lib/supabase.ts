@@ -2,19 +2,32 @@ import { Pool } from 'pg';
 import { nanoid } from 'nanoid';
 
 // PostgreSQL Connection Pool
+declare global {
+  var __globalPgPool: Pool | undefined;
+}
+
 let globalPool: Pool | null = null;
 
 function getPool(): Pool {
+  if (globalThis.__globalPgPool) {
+    return globalThis.__globalPgPool;
+  }
+
   if (!globalPool) {
-    const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
+    const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
     globalPool = new Pool({
       connectionString,
       ssl: connectionString && !connectionString.includes('localhost')
         ? { rejectUnauthorized: false }
         : false,
-      max: 10,
-      idleTimeoutMillis: 30000,
+      max: process.env.NODE_ENV === 'production' ? 5 : 10,
+      idleTimeoutMillis: 20000,
+      connectionTimeoutMillis: 10000,
     });
+
+    if (process.env.NODE_ENV !== 'production') {
+      globalThis.__globalPgPool = globalPool;
+    }
   }
   return globalPool;
 }
