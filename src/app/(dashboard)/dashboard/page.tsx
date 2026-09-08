@@ -317,6 +317,23 @@ export default async function DashboardPage() {
             <h3 className="text-[22px] font-bold leading-tight mb-0.5">{subscription?.plan?.name || 'Starter Plan'}</h3>
             <p className="text-[13px] text-blue-200">{maxEndpoints > 0 ? `${maxEndpoints} Email Endpoints` : 'Loading usage…'}</p>
 
+            {/* Trial end date */}
+            {subscription?.status === 'TRIALING' && subscription?.currentPeriodEnd && (() => {
+              const trialEnd = new Date(subscription.currentPeriodEnd);
+              const daysLeft = Math.ceil((trialEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+              return (
+                <div className={`mt-3 px-3 py-2 rounded-xl text-[12px] font-semibold flex items-center gap-2 ${daysLeft <= 3 ? 'bg-red-500/30 text-red-100' : 'bg-white/15 text-blue-100'}`}>
+                  <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                  {daysLeft <= 0
+                    ? '⚠️ Trial has ended — please upgrade'
+                    : daysLeft <= 3
+                    ? `⚠️ Trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`
+                    : `Trial ends ${trialEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · ${daysLeft}d left`
+                  }
+                </div>
+              );
+            })()}
+
             {/* Mini usage bar */}
             <div className="mt-4">
               <div className="flex justify-between text-[11px] text-blue-200 mb-1.5">
@@ -335,7 +352,7 @@ export default async function DashboardPage() {
               href="/billing"
               className="mt-4 block text-center bg-white text-blue-700 font-bold text-[13px] py-2.5 rounded-xl hover:bg-blue-50 transition-colors"
             >
-              Manage Subscription
+              {subscription?.status === 'TRIALING' ? 'Upgrade Plan →' : 'Manage Subscription'}
             </Link>
           </div>
 

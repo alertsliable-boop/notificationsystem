@@ -109,6 +109,54 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
         </div>
       )}
 
+      {/* Free Trial Expiry Banner */}
+      {subscription?.status === 'TRIALING' && subscription?.currentPeriodEnd && (() => {
+        const trialEnd = new Date(subscription.currentPeriodEnd);
+        const now = new Date();
+        const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const isExpiringSoon = daysLeft <= 3;
+        const isExpired = daysLeft <= 0;
+
+        if (isExpired) {
+          return (
+            <div className="p-4 sm:p-5 bg-red-50 border-2 border-red-300 rounded-2xl flex items-start gap-3 sm:gap-4 animate-fadeIn">
+              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-bold text-red-900 text-sm sm:text-base">Free Trial Has Ended</h3>
+                <p className="text-red-700 text-xs sm:text-sm mt-1 leading-relaxed">
+                  Your free trial ended on <strong>{trialEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>. Your endpoints may stop processing emails. Upgrade now to keep your alerts running.
+                </p>
+              </div>
+              <Link href="#plans" className="flex-shrink-0 px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-xl hover:bg-red-700 transition-colors whitespace-nowrap">
+                Upgrade Now
+              </Link>
+            </div>
+          );
+        }
+
+        return (
+          <div className={`p-4 sm:p-5 rounded-2xl flex items-start gap-3 sm:gap-4 border-2 animate-fadeIn ${isExpiringSoon ? 'bg-amber-50 border-amber-300' : 'bg-blue-50 border-blue-200'}`}>
+            <Clock className={`w-5 h-5 flex-shrink-0 mt-0.5 ${isExpiringSoon ? 'text-amber-600' : 'text-blue-600'}`} />
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className={`font-bold text-sm sm:text-base ${isExpiringSoon ? 'text-amber-900' : 'text-blue-900'}`}>
+                  {isExpiringSoon ? `⚠️ Trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}!` : `Free Trial — ${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining`}
+                </h3>
+              </div>
+              <p className={`text-xs sm:text-sm leading-relaxed ${isExpiringSoon ? 'text-amber-700' : 'text-blue-700'}`}>
+                Your trial expires on <strong>{trialEnd.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}</strong>.
+                {isExpiringSoon ? ' Upgrade now to avoid service interruption.' : ' Upgrade anytime to unlock all features and keep your alerts running.'}
+              </p>
+            </div>
+            {isExpiringSoon && (
+              <Link href="#plans" className="flex-shrink-0 px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-xl hover:bg-amber-700 transition-colors whitespace-nowrap">
+                Upgrade Now
+              </Link>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Current Usage Card */}
       <Card className="border-signal-blue/15 bg-signal-blue/5 shadow-subtle">
         <CardContent className="p-5 sm:p-6">
@@ -123,9 +171,21 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
                   <h2 className="text-xl sm:text-[24px] font-semibold text-ink-black tracking-[-0.48px] leading-tight">{subscription?.plan?.name ?? 'Starter'} Plan</h2>
                 </div>
               </div>
+
+              {/* Trial End Date shown inside card too */}
+              {subscription?.status === 'TRIALING' && subscription?.currentPeriodEnd && (
+                <div className="flex items-center gap-2 mt-2 text-[13px] text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg w-fit">
+                  <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>Trial ends: <strong>{new Date(subscription.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong></span>
+                </div>
+              )}
             </div>
             <div className="self-start sm:self-auto">
-              <Badge variant={subscription?.status === 'ACTIVE' ? 'success' : 'danger'}>
+              <Badge variant={
+                subscription?.status === 'ACTIVE' ? 'success' :
+                subscription?.status === 'TRIALING' ? 'warning' :
+                'danger'
+              }>
                 {subscription?.status ?? 'ACTIVE'}
               </Badge>
             </div>
@@ -165,8 +225,9 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
         </CardContent>
       </Card>
 
+
       {/* Pricing Plans */}
-      <div>
+      <div id="plans">
         <div className="text-center mb-8 sm:mb-12">
           <h2 className="text-2xl sm:text-[28px] font-bold text-ink-black leading-tight">Subscription Plans</h2>
           <p className="text-smoke mt-2 text-sm sm:text-base tracking-[-0.32px]">

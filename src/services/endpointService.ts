@@ -140,8 +140,8 @@ export async function createEndpoint({
     throw new Error(`Maximum of ${maxRecipients} recipients allowed per endpoint on your current plan. Please upgrade or remove some recipients.`);
   }
 
-  // Get or create platform domain
-  const targetDomainName = domainName || 'mail.liablealerts.com';
+  // Get or create platform domain — use Resend-verified inbound domain
+  const targetDomainName = domainName || 'alarms.liablealerts.com';
   let { data: domain } = await supabase
     .from('Domain')
     .select('*')

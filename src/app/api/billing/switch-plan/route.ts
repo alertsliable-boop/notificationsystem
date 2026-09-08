@@ -110,13 +110,21 @@ export async function POST(req: Request) {
       .eq('id', ctx.companyId)
       .single();
 
-    // Check if Stripe is configured
+    // Check if Stripe is configured — if not, return a clear actionable message
     if (!isStripeConfigured()) {
-      return NextResponse.json({ error: 'Stripe is not configured in this environment.' }, { status: 500 });
+      console.error('[Switch Plan] Stripe not configured — STRIPE_SECRET_KEY missing or is a mock key');
+      return NextResponse.json(
+        { error: 'Payment processing is temporarily unavailable. Please contact support at support@liablealerts.com.' },
+        { status: 503 }
+      );
     }
 
     if (!newPlan.stripePriceId) {
-      return NextResponse.json({ error: 'Selected plan is missing a Stripe Price ID.' }, { status: 400 });
+      console.error(`[Switch Plan] Plan "${newPlan.code}" has no stripePriceId — run setup_stripe.js to seed Stripe Price IDs`);
+      return NextResponse.json(
+        { error: 'This plan is not yet available for purchase. Please contact support@liablealerts.com.' },
+        { status: 400 }
+      );
     }
 
     const origin = req.headers.get('origin') || 'http://localhost:3000';
