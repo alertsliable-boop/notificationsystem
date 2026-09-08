@@ -239,7 +239,7 @@ export default function EndpointsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredEndpoints.map((ep) => {
-                    const address = `${ep.localPart}@${ep.domain?.hostname || 'mail.liablealerts.com'}`;
+                    const address = `${ep.localPart}@${ep.domain?.hostname || 'alarms.liablealerts.com'}`;
                     const isActive = ep.status === 'ACTIVE';
 
                     return (

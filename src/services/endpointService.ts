@@ -250,7 +250,9 @@ export async function processInboundEmail(formEntries: Record<string, string>) {
   const to = formEntries['to'] || '';
   const emailMatch = to.match(/<([^>]+)>/);
   const rawEmail = emailMatch ? emailMatch[1] : to;
-  const localPart = rawEmail.split('@')[0].toLowerCase().trim();
+  const parts = rawEmail.split('@');
+  const localPart = parts[0].toLowerCase().trim();
+  const domainPart = parts[1] ? parts[1].toLowerCase().trim() : '';
   const subject = formEntries['subject'] || '(No Subject)';
   const textBody = formEntries['text'] || formEntries['html'] || '';
   const messageId = formEntries['Message-ID'] || formEntries['headers']?.match(/Message-ID:\s*<([^>]+)>/i)?.[1] || '';
@@ -286,15 +288,37 @@ export async function processInboundEmail(formEntries: Record<string, string>) {
     webhookEvent = newEvent;
   }
 
-  const { data: endpoint } = await supabase
-    .from('InboundEndpoint')
-    .select('*, domain:Domain(*)')
-    .eq('localPart', localPart)
-    .eq('status', 'ACTIVE')
-    .single();
+  let endpoint: any = null;
+
+  // 1. If domain is provided, try exact match on localPart + domain hostname
+  if (domainPart) {
+    const { data: matchedWithDomain } = await supabase
+      .from('InboundEndpoint')
+      .select('*, domain:Domain!inner(*)')
+      .eq('localPart', localPart)
+      .eq('domain.hostname', domainPart)
+      .eq('status', 'ACTIVE')
+      .limit(1)
+      .maybeSingle();
+    if (matchedWithDomain) {
+      endpoint = matchedWithDomain;
+    }
+  }
+
+  // 2. Fallback: match by localPart across any active domain (e.g. alarms, alerts, liablealerts.com)
+  if (!endpoint) {
+    const { data: fallbackEndpoint } = await supabase
+      .from('InboundEndpoint')
+      .select('*, domain:Domain(*)')
+      .eq('localPart', localPart)
+      .eq('status', 'ACTIVE')
+      .limit(1)
+      .maybeSingle();
+    endpoint = fallbackEndpoint;
+  }
 
   if (!endpoint) {
-    console.log(`[INBOUND] No active endpoint found for localPart: ${localPart}`);
+    console.log(`[INBOUND] No active endpoint found for localPart: ${localPart} (domain: ${domainPart || 'any'})`);
     if (webhookEvent) {
       await supabase.from('WebhookEvent').update({ processedAt: new Date().toISOString() }).eq('id', webhookEvent.id);
     }

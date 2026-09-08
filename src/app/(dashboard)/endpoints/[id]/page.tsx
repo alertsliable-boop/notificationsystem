@@ -58,7 +58,7 @@ export default async function EndpointDetailPage({
     
   const recentNotifications = recentNotificationsData || [];
 
-  const emailAddress = `${endpoint.localPart}@${endpoint.domain?.hostname || 'mail.liablealerts.com'}`;
+  const emailAddress = `${endpoint.localPart}@${endpoint.domain?.hostname || 'alarms.liablealerts.com'}`;
   const isActive = endpoint.status === 'ACTIVE';
 
   return (
