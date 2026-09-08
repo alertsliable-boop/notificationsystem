@@ -11,9 +11,18 @@ import { SwitchPlanButton } from './PlanManager';
 
 export const metadata = { title: 'Billing & Subscription Plans | Liable Alerts' };
 
-export default async function BillingPage({ searchParams }: { searchParams: { status?: string } }) {
+// Fallback plan data — shown when DB fetch fails so UI always renders
+const FALLBACK_PLANS = [
+  { code: 'starter', name: 'Starter', priceCents: 4900, maxActiveEndpoints: 1 },
+  { code: 'pro', name: 'Pro', priceCents: 9900, maxActiveEndpoints: 5 },
+  { code: 'business', name: 'Business', priceCents: 19900, maxActiveEndpoints: 20 },
+];
+
+export default async function BillingPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/login');
+
+  const { status } = await searchParams;
 
   const supabase = getAdminClient();
   const { data: membership } = await supabase
@@ -23,6 +32,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { st
     .single();
   if (!membership) return null;
 
+  // Run all queries in parallel to reduce DB connections
   const [
     { data: subscription },
     { count: activeCount },
@@ -33,7 +43,9 @@ export default async function BillingPage({ searchParams }: { searchParams: { st
     supabase.from('SubscriptionPlan').select('*').order('priceCents', { ascending: true })
   ]);
   
-  const dbPlans = (dbPlansData || []).filter((p: any) => p.code !== 'free_trial');
+  // Use DB plans if available, otherwise fall back to hardcoded plans
+  const rawPlans = (dbPlansData || []).filter((p: any) => p.code !== 'free_trial');
+  const dbPlans = rawPlans.length > 0 ? rawPlans : FALLBACK_PLANS;
 
   const currentPlanCode = subscription?.plan?.code;
   const maxEndpoints = subscription?.plan?.maxActiveEndpoints ?? 5;
@@ -57,7 +69,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { st
   return (
     <div className="space-y-8 sm:space-y-12 animate-fadeIn max-w-5xl py-4 sm:py-6">
       {/* Success/Cancel Banners */}
-      {(searchParams.status === 'success' || searchParams.status === 'updated') && (
+      {(status === 'success' || status === 'updated') && (
         <div className="p-4 mb-6 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3 animate-fadeIn">
           <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
           <div>
@@ -66,7 +78,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { st
           </div>
         </div>
       )}
-      {searchParams.status === 'cancelled' && (
+      {status === 'cancelled' && (
         <div className="p-4 mb-6 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 animate-fadeIn">
           <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
           <div>

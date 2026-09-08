@@ -1,35 +1,48 @@
 import { Pool } from 'pg';
 import { nanoid } from 'nanoid';
 
-// PostgreSQL Connection Pool
+// PostgreSQL Connection Pool — always stored in globalThis to survive hot-reloads
+// and prevent multiple pool instances that exhaust the Supabase PgBouncer session limit (15 connections).
 declare global {
   var __globalPgPool: Pool | undefined;
 }
-
-let globalPool: Pool | null = null;
 
 function getPool(): Pool {
   if (globalThis.__globalPgPool) {
     return globalThis.__globalPgPool;
   }
 
-  if (!globalPool) {
-    const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
-    globalPool = new Pool({
-      connectionString,
-      ssl: connectionString && !connectionString.includes('localhost')
-        ? { rejectUnauthorized: false }
-        : false,
-      max: process.env.NODE_ENV === 'production' ? 5 : 10,
-      idleTimeoutMillis: 20000,
-      connectionTimeoutMillis: 10000,
-    });
+  const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
 
-    if (process.env.NODE_ENV !== 'production') {
-      globalThis.__globalPgPool = globalPool;
+  // IMPORTANT: Supabase PgBouncer in session mode allows max 15 connections total.
+  // We keep max=2 so many concurrent SSR requests never exceed the limit.
+  // Use connection keepAlive to avoid stale sockets that cause ECONNRESET.
+  const pool = new Pool({
+    connectionString,
+    ssl: connectionString && !connectionString.includes('localhost')
+      ? { rejectUnauthorized: false }
+      : false,
+    max: 2,                        // Safe limit for Supabase session pooler (15 total)
+    min: 0,                        // Don't hold idle connections open
+    idleTimeoutMillis: 10000,      // Release idle connections after 10s
+    connectionTimeoutMillis: 8000, // Fail fast if pool is saturated
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
+  });
+
+  // Cache in globalThis for BOTH dev and prod to avoid pool recreation
+  globalThis.__globalPgPool = pool;
+
+  // Evict the cached pool if it encounters a fatal error so it gets rebuilt
+  pool.on('error', (err) => {
+    console.error('[DB Pool Error]', err.message);
+    if (err.message?.includes('EMAXCONNSESSION') || err.message?.includes('max clients')) {
+      console.warn('[DB Pool] Connection limit hit — evicting pool cache for rebuild');
+      globalThis.__globalPgPool = undefined;
     }
-  }
-  return globalPool;
+  });
+
+  return pool;
 }
 
 interface Filter {
@@ -562,9 +575,18 @@ class QueryBuilder<T = any> {
 
       return { data: null, count: null, error: null };
     } catch (err: any) {
-      if (retryCount < 1 && (err.message?.includes('terminat') || err.message?.includes('socket') || err.message?.includes('Connection') || err.message?.includes('timeout') || err.message?.includes('read ECONNRESET'))) {
+      const isRetryable = err.message?.includes('terminat') ||
+        err.message?.includes('socket') ||
+        err.message?.includes('Connection') ||
+        err.message?.includes('timeout') ||
+        err.message?.includes('read ECONNRESET') ||
+        err.message?.includes('EMAXCONNSESSION') ||
+        err.message?.includes('max clients');
+
+      if (retryCount < 1 && isRetryable) {
         console.warn(`[DB Stale Connection] Retrying query on ${this.tableName}...`);
-        globalPool = null;
+        // Evict pool so it gets rebuilt with a fresh connection
+        globalThis.__globalPgPool = undefined;
         return this.execute(retryCount + 1);
       }
       console.error(`[DB Query Error on ${this.tableName}]`, err);

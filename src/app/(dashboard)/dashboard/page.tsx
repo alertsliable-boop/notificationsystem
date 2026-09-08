@@ -21,7 +21,7 @@ export default async function DashboardPage() {
     .select('*, company:Company(*)')
     .eq('userId', session.user.id)
     .single();
-  if (!membership) return <div>No company found.</div>;
+  if (!membership) redirect('/login');
 
   const companyId = membership.companyId;
 
@@ -314,8 +314,8 @@ export default async function DashboardPage() {
               </span>
             </div>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-200 mb-1">Current Plan</p>
-            <h3 className="text-[22px] font-bold leading-tight mb-0.5">{subscription?.plan?.name || 'Free Plan'}</h3>
-            <p className="text-[13px] text-blue-200">{maxEndpoints} Email Endpoints</p>
+            <h3 className="text-[22px] font-bold leading-tight mb-0.5">{subscription?.plan?.name || 'Starter Plan'}</h3>
+            <p className="text-[13px] text-blue-200">{maxEndpoints > 0 ? `${maxEndpoints} Email Endpoints` : 'Loading usage…'}</p>
 
             {/* Mini usage bar */}
             <div className="mt-4">

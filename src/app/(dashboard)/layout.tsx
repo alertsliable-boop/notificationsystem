@@ -13,6 +13,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const supabase = getAdminClient();
+
+  // Fetch membership first (need companyId for subsequent queries)
   const { data: membership } = await supabase
     .from('Membership')
     .select('*, company:Company(*)')
@@ -20,30 +22,29 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .limit(1)
     .single();
 
-  let subscription = null;
-  if (membership?.companyId) {
-    const { data } = await supabase
+  // If no membership, redirect to login — account may not be fully set up
+  if (!membership?.companyId) {
+    redirect('/login');
+  }
+
+  // Run subscription + active count in parallel to reduce DB round-trips
+  const [{ data: subscriptionData }, { count: activeCountResult }] = await Promise.all([
+    supabase
       .from('CompanySubscription')
       .select('*, plan:SubscriptionPlan(*)')
       .eq('companyId', membership.companyId)
-      .single();
-    subscription = data;
-  }
-
-  let activeCount = 0;
-  if (membership?.companyId) {
-    const { count } = await supabase
+      .single(),
+    supabase
       .from('InboundEndpoint')
       .select('*', { count: 'exact', head: true })
       .eq('companyId', membership.companyId)
-      .eq('status', 'ACTIVE');
-    activeCount = count || 0;
-  }
+      .eq('status', 'ACTIVE'),
+  ]);
 
+  const subscription = subscriptionData;
+  const activeCount = activeCountResult || 0;
   const maxEndpoints = subscription?.plan?.maxActiveEndpoints || 5;
-  const usagePct = subscription
-    ? Math.round((activeCount / maxEndpoints) * 100)
-    : 0;
+  const usagePct = Math.round((activeCount / maxEndpoints) * 100);
 
   return (
     <DashboardShell
