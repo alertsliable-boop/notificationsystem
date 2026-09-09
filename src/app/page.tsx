@@ -212,6 +212,10 @@ export default function HomePage() {
             ))}
           </div>
 
+          <p className="text-xs text-center text-gray-500 mt-6">
+            * Text messages are metered per segment (up to 160 standard characters per segment). Alerts that split into 2 or more segments count as 2+ messages towards your monthly allowance.
+          </p>
+
           {/* Detailed Pricing Policies */}
           <div className="mt-16 sm:mt-24 pt-12 sm:pt-16 border-t border-[#E5E7EB]/60">
             <div className="text-center mb-12 sm:mb-16">
@@ -254,9 +258,9 @@ export default function HomePage() {
                     <Activity className="w-5 h-5 text-amber-600" />
                   </div>
                   <div>
-                    <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-2">Strictly Metered Limits</h4>
+                    <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-2">Strictly Metered Limits & SMS Segments</h4>
                     <p className="text-sm text-gray-600 leading-relaxed">
-                      Each endpoint gets exactly <strong>100 SMS/month</strong>. Messages are <em>not</em> pooled between endpoints. If one alarm goes to 10 recipients, that counts as 10 messages used against that endpoint's quota.
+                      Each endpoint gets exactly <strong>100 SMS/month</strong>. Text messages are charged and counted per segment (standard 160 characters per SMS segment). If an alarm message exceeds this limit and splits into 2 message segments, it counts as 2 messages against that endpoint's quota. If an alarm splits into 2 segments and goes to 10 recipients, that counts as 20 messages. Messages are <em>not</em> pooled between endpoints.
                     </p>
                   </div>
                 </div>

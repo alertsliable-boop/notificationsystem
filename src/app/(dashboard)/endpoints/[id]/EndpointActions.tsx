@@ -271,6 +271,11 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
             ))}
           </div>
         )}
+
+        {/* SMS Segment Reminder */}
+        <div className="px-5 py-2.5 bg-gray-50/80 border-t border-gray-100 text-[11px] text-gray-500 leading-relaxed">
+          <strong>Note:</strong> Messages are counted per segment (up to 160 characters). If an alert exceeds 160 characters and splits into 2 segments, it counts as 2 messages per recipient.
+        </div>
       </div>
     </div>
   );

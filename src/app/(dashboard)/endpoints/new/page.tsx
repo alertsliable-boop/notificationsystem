@@ -32,14 +32,18 @@ export default function CreateEndpointPage() {
       fetch('/api/customers'),
       fetch('/api/sites'),
       fetch('/api/endpoints'),
-      fetch('/api/billing/switch-plan') // or billing info
-    ]).then(async ([cr, sr, er]) => {
-      const [cJson, sJson, eJson] = await Promise.all([cr.json(), sr.json(), er.json()]);
+      fetch('/api/dashboard/usage'),
+    ]).then(async ([cr, sr, er, ur]) => {
+      const [cJson, sJson, eJson, uJson] = await Promise.all([cr.json(), sr.json(), er.json(), ur.json()]);
       setCustomers(cJson.data || []);
       setSites(sJson.data || []);
       
-      const activeCount = (eJson.data || []).filter((e: any) => e.status === 'ACTIVE').length;
-      setUsageInfo({ active: activeCount, max: 25 }); // default max
+      const activeCount = uJson.data?.activeEndpoints ?? (eJson.data || []).filter((e: any) => e.status === 'ACTIVE').length;
+      const maxAllowed = uJson.data?.maxEndpoints ?? 1;
+      setUsageInfo({ active: activeCount, max: maxAllowed });
+      if (activeCount >= maxAllowed) {
+        setIsAtLimit(true);
+      }
     });
   }, []);
 
@@ -298,6 +302,14 @@ export default function CreateEndpointPage() {
               </p>
               <p className="text-blue-800">
                 Mobile information and SMS consent will not be sold or shared with third parties or affiliates for marketing or promotional purposes.
+              </p>
+            </div>
+
+            {/* SMS Segment & Quota Counting Note */}
+            <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 text-[11px] text-amber-900 leading-relaxed space-y-0.5">
+              <p className="font-semibold text-amber-950">SMS Segment & Quota Notice:</p>
+              <p>
+                Text messages are charged and counted per segment (up to 160 standard characters per segment). If an alarm message exceeds 160 characters and splits into 2 message segments, it counts as 2 messages against your endpoint monthly quota.
               </p>
             </div>
           </div>

@@ -99,6 +99,16 @@ export default function RegisterPage() {
               </div>
             ))}
           </div>
+
+          {/* SMS Segment Explanation Box */}
+          <div className="bg-white/10 border border-white/15 rounded-xl p-4 text-xs text-blue-100 space-y-1 mt-8">
+            <p className="font-bold text-white flex items-center gap-1.5">
+              <span>ℹ️</span> SMS Message Counting:
+            </p>
+            <p className="leading-relaxed text-blue-100/90">
+              Text messages are charged and counted per segment (up to 160 standard characters). If an alert email exceeds 160 characters and splits into 2 message segments, it counts as 2 messages against your allowance.
+            </p>
+          </div>
         </div>
 
         <div className="relative z-10 text-blue-200 text-sm">
@@ -207,6 +217,10 @@ export default function RegisterPage() {
                 Mobile information and SMS consent will not be sold, rented, or shared with third parties or affiliates for marketing or promotional purposes.
               </p>
             </div>
+
+            <p className="text-[11px] text-gray-500 leading-normal px-1">
+              * Note: Text messages are counted per segment (160 characters). Longer alerts that deliver across multiple segments count as multiple messages towards your plan quota.
+            </p>
 
             <div className="pt-2">
               <Button

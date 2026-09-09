@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { MapPin, Plus, Loader2, Edit2, Trash2 } from 'lucide-react';
 
-interface Site { id: string; name: string; address: string | null; customerId: string; customer: { id: string, name: string }; _count: { endpoints: number }; }
+interface Site { id: string; name: string; address: string | null; customerId: string; customer: { id: string, name: string }; _count: { endpoints: number; recipients?: number }; }
 interface Customer { id: string; name: string; }
 
 export default function SitesPage() {
@@ -139,6 +139,7 @@ export default function SitesPage() {
                   <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Customer</th>
                   <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Address</th>
                   <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Endpoints</th>
+                  <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Recipients</th>
                   <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
@@ -149,6 +150,7 @@ export default function SitesPage() {
                     <td className="px-6 py-4 text-sm text-graphite tracking-[-0.28px]">{s.customer.name}</td>
                     <td className="px-6 py-4 text-sm text-smoke tracking-[-0.28px]">{s.address || '—'}</td>
                     <td className="px-6 py-4 text-sm text-smoke tracking-[-0.28px]">{s._count.endpoints}</td>
+                    <td className="px-6 py-4 text-sm text-smoke tracking-[-0.28px]">{s._count.recipients || 0}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-1">
                         <button onClick={() => handleEdit(s)} className="p-2 text-smoke hover:text-signal-blue transition-colors">

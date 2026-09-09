@@ -43,7 +43,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const subscription = subscriptionData;
   const activeCount = activeCountResult || 0;
-  const maxEndpoints = subscription?.plan?.maxActiveEndpoints || 5;
+  const maxEndpoints = subscription?.plan?.maxActiveEndpoints || 1;
   const usagePct = Math.round((activeCount / maxEndpoints) * 100);
 
   return (

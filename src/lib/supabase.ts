@@ -561,7 +561,14 @@ class QueryBuilder<T = any> {
         return { data: res.rows, count: res.rowCount, error: null };
 
       } else if (this.action === 'upsert') {
-        const item = Array.isArray(this.insertData) ? this.insertData[0] : this.insertData;
+        const rawItem = Array.isArray(this.insertData) ? this.insertData[0] : this.insertData;
+        const item = { ...rawItem };
+        if (!item.id) {
+          item.id = nanoid();
+        }
+        if (item.createdAt === undefined && this.tableName !== 'EndpointRecipient' && this.tableName !== 'Membership' && this.tableName !== 'Domain' && this.tableName !== 'Customer' && this.tableName !== 'Site' && this.tableName !== 'PhoneRecipient' && this.tableName !== 'Notification' && this.tableName !== 'NotificationPayload') {
+          item.createdAt = new Date().toISOString();
+        }
         const cols = Object.keys(item);
         const vals = Object.values(item);
         const colNames = cols.map(c => `"${c}"`).join(', ');

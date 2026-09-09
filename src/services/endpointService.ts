@@ -47,7 +47,7 @@ export async function getSubscriptionUsage(companyId: string) {
       .order('createdAt', { ascending: false }),
   ]);
 
-  const maxActiveEndpoints = subscription?.plan?.maxActiveEndpoints ?? 5;
+  const maxActiveEndpoints = subscription?.plan?.maxActiveEndpoints ?? 1;
   const currentActive = activeCount || 0;
   const isOverLimit = currentActive > maxActiveEndpoints;
   const remainingSlots = Math.max(0, maxActiveEndpoints - currentActive);

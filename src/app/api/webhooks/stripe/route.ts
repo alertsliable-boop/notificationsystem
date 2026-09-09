@@ -37,16 +37,35 @@ export async function POST(req: Request) {
 
         if (plan) {
           const subscriptionId = session.subscription || session.id;
+          const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
           
-          await supabase
+          const { data: existingSub } = await supabase
             .from('CompanySubscription')
-            .upsert({
-              companyId,
-              planId: plan.id,
-              status: 'ACTIVE',
-              stripeSubscriptionId: subscriptionId,
-              currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            });
+            .select('id')
+            .eq('companyId', companyId)
+            .single();
+
+          if (existingSub) {
+            await supabase
+              .from('CompanySubscription')
+              .update({
+                planId: plan.id,
+                status: 'ACTIVE',
+                stripeSubscriptionId: subscriptionId,
+                currentPeriodEnd,
+              })
+              .eq('id', existingSub.id);
+          } else {
+            await supabase
+              .from('CompanySubscription')
+              .insert({
+                companyId,
+                planId: plan.id,
+                status: 'ACTIVE',
+                stripeSubscriptionId: subscriptionId,
+                currentPeriodEnd,
+              });
+          }
 
           console.log(`[STRIPE WEBHOOK] Activated plan ${planCode} for company ${companyId}`);
         }

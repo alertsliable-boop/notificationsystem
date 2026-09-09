@@ -13,9 +13,9 @@ export const metadata = { title: 'Billing & Subscription Plans | Liable Alerts' 
 
 // Fallback plan data — shown when DB fetch fails so UI always renders
 const FALLBACK_PLANS = [
-  { code: 'starter', name: 'Starter', priceCents: 4900, maxActiveEndpoints: 1 },
-  { code: 'pro', name: 'Pro', priceCents: 9900, maxActiveEndpoints: 5 },
-  { code: 'business', name: 'Business', priceCents: 19900, maxActiveEndpoints: 20 },
+  { code: 'starter', name: 'Starter', priceCents: 1900, maxActiveEndpoints: 1 },
+  { code: 'pro', name: 'Professional', priceCents: 5900, maxActiveEndpoints: 5 },
+  { code: 'business', name: 'Business', priceCents: 12900, maxActiveEndpoints: 15 },
 ];
 
 export default async function BillingPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
@@ -48,13 +48,13 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const dbPlans = rawPlans.length > 0 ? rawPlans : FALLBACK_PLANS;
 
   const currentPlanCode = subscription?.plan?.code;
-  const maxEndpoints = subscription?.plan?.maxActiveEndpoints ?? 5;
+  const maxEndpoints = subscription?.plan?.maxActiveEndpoints ?? 1;
   const currentActive = activeCount || 0;
   const usagePct = subscription ? Math.min((currentActive / maxEndpoints) * 100, 100) : 0;
   const isOverLimit = currentActive > maxEndpoints;
 
   const getFeatures = (code: string, max: number) => {
-    if (code === 'starter') return [`${max} Active Email Endpoint`, '100 SMS messages/mo', 'Up to 10 SMS recipients', 'Full Delivery Logs & Audit Trails'];
+    if (code === 'starter') return [`${max} Active Email Endpoint`, '100 SMS messages/mo', 'Up to 10 SMS recipients per endpoint', 'Full Delivery Logs & Audit Trails'];
     if (code === 'pro') return [`Up to ${max} Active Email Endpoints`, '100 SMS messages/mo per endpoint', 'Up to 10 SMS recipients per endpoint', 'Full Delivery Logs & Priority Support'];
     if (code === 'business') return [`Up to ${max} Active Email Endpoints`, '100 SMS messages/mo per endpoint', 'Up to 10 SMS recipients per endpoint', '24/7 Dedicated Support & Custom Domains'];
     return [`${max}+ Custom Active Email Endpoints`, 'Custom SMS volume', 'Unlimited recipients', 'Enterprise SLA & Compliance'];
@@ -291,29 +291,17 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
           })}
         </div>
 
-        {/* Custom Enterprise Plan Section */}
-        <div className="mt-12 p-6 bg-paper-white border border-ash-mist rounded-[22px] shadow-subtle">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 bg-signal-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
-              <Users className="w-5 h-5 text-signal-blue" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-[18px] text-ink-black tracking-[-0.32px] mb-1">Need a Custom Enterprise Plan?</h3>
-              <p className="text-[14px] text-smoke tracking-[-0.28px] mb-4 leading-[1.35]">
-                For large-scale industrial operations requiring more than 100 inbound email accounts, dedicated SMS infrastructure, or custom integrations.
-              </p>
-              <a href="mailto:sales@liablealerts.com?subject=Enterprise%20Plan%20Inquiry">
-                <Button variant="outline" size="sm">
-                  Contact Sales & Custom Tier
-                </Button>
-              </a>
-            </div>
-          </div>
+        <div className="mt-8 p-5 bg-blue-50/50 border border-blue-100 rounded-2xl text-center space-y-2">
+          <p className="text-xs sm:text-sm font-bold text-gray-900">
+            * Note on SMS Counting & Message Segments
+          </p>
+          <p className="text-xs text-gray-600 max-w-2xl mx-auto leading-relaxed">
+            Standard text messages are charged and counted per segment (up to 160 standard characters per segment). If an email notification exceeds 160 characters and is sent out as 2 or more message segments, each segment counts as a message towards your monthly endpoint allowance.
+          </p>
+          <p className="text-[11px] text-gray-400 pt-1">
+            Active email accounts can be toggled on/off at any time in the Endpoints dashboard. Automated billing powered by Stripe.
+          </p>
         </div>
-
-        <p className="text-[12px] text-smoke mt-6 text-center tracking-[-0.24px]">
-          * Active email accounts can be toggled on/off at any time in the Endpoints dashboard. Automated billing powered by Stripe.
-        </p>
       </div>
     </div>
   );
