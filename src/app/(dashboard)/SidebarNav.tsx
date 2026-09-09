@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, Mail, Users, Bell, Settings, 
-  CreditCard, ClipboardList, MapPin, Phone, type LucideIcon 
+  CreditCard, ClipboardList, MapPin, Phone, ShieldCheck, type LucideIcon 
 } from 'lucide-react';
 
 interface NavItem {
@@ -27,6 +27,10 @@ const settingsNavItems: NavItem[] = [
   { label: 'Team', href: '/team', icon: Users },
   { label: 'Audit Logs', href: '/audit', icon: ClipboardList },
   { label: 'Settings', href: '/settings', icon: Settings },
+];
+
+const adminNavItems: NavItem[] = [
+  { label: 'Admin Portal', href: '/admin', icon: ShieldCheck },
 ];
 
 function SidebarNavList({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
@@ -70,4 +74,9 @@ export function MainSidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 export function SettingsSidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   return <SidebarNavList items={settingsNavItems} onNavigate={onNavigate} />;
 }
+
+export function AdminSidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+  return <SidebarNavList items={adminNavItems} onNavigate={onNavigate} />;
+}
+
 

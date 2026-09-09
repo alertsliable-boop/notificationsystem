@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { getAdminClient } from '@/lib/supabase';
 import { redirect } from 'next/navigation';
+import { isSuperAdmin } from '@/lib/adminAuth';
 import DashboardShell from './DashboardShell';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -55,6 +56,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       activeCount={activeCount}
       maxEndpoints={maxEndpoints}
       usagePct={usagePct}
+      isSuperAdmin={isSuperAdmin(session.user?.email)}
     >
       {children}
     </DashboardShell>

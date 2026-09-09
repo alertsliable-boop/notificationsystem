@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Zap, Menu, X, Mail } from 'lucide-react';
-import { MainSidebarNav, SettingsSidebarNav } from './SidebarNav';
+import { Zap, Menu, X, Mail, ShieldCheck } from 'lucide-react';
+import { MainSidebarNav, SettingsSidebarNav, AdminSidebarNav } from './SidebarNav';
 import SignOutButton from '@/components/SignOutButton';
 import PageTransition from '@/components/PageTransition';
 
@@ -16,6 +16,7 @@ interface DashboardShellProps {
   activeCount: number;
   maxEndpoints: number;
   usagePct: number;
+  isSuperAdmin?: boolean;
   children: React.ReactNode;
 }
 
@@ -27,6 +28,7 @@ export default function DashboardShell({
   activeCount,
   maxEndpoints,
   usagePct,
+  isSuperAdmin = false,
   children,
 }: DashboardShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -99,6 +101,16 @@ export default function DashboardShell({
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-2">Settings</p>
             <SettingsSidebarNav onNavigate={() => setMobileMenuOpen(false)} />
           </div>
+
+          {isSuperAdmin && (
+            <div className="pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between px-3 mb-2">
+                <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Administration</p>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 tracking-wider">SUPER</span>
+              </div>
+              <AdminSidebarNav onNavigate={() => setMobileMenuOpen(false)} />
+            </div>
+          )}
         </nav>
 
         {/* Usage Widget */}
@@ -174,6 +186,15 @@ export default function DashboardShell({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {isSuperAdmin && (
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs rounded-full transition-all border border-indigo-200"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Admin Portal</span>
+              </Link>
+            )}
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-100 rounded-full">
               <span className="w-1.5 h-1.5 bg-green-500 rounded-full pulse-dot" />
               <span className="text-[11px] font-semibold text-green-700">Live</span>
