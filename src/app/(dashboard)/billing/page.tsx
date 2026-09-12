@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getAdminClient } from '@/lib/supabase';
+import { stripe, isStripeConfigured } from '@/lib/stripe';
 import { CreditCard, Zap, CheckCircle2, ArrowUpCircle, TrendingUp, Shield, Mail, Users, Clock, Star, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/Card';
@@ -23,11 +24,11 @@ const FALLBACK_PLANS = [
   { code: 'business', name: 'Business', priceCents: 12900, maxActiveEndpoints: 15 },
 ];
 
-export default async function BillingPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+export default async function BillingPage({ searchParams }: { searchParams: Promise<{ status?: string; session_id?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/login');
 
-  const { status } = await searchParams;
+  const { status, session_id } = await searchParams;
 
   const supabase = getAdminClient();
   const { data: membership } = await supabase
@@ -36,6 +37,49 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
     .eq('userId', session.user.id)
     .single();
   if (!membership) return null;
+
+  // If returning from Stripe Checkout, verify and sync subscription immediately
+  if (status === 'success' && session_id && isStripeConfigured()) {
+    try {
+      const checkoutSession = await stripe.checkout.sessions.retrieve(session_id);
+      if (checkoutSession.status === 'complete' && checkoutSession.metadata?.planCode) {
+        const planCode = checkoutSession.metadata.planCode;
+        const extraEndpoints = parseInt(checkoutSession.metadata.extraEndpoints || '0', 10) || 0;
+        const { data: plan } = await supabase.from('SubscriptionPlan').select('*').eq('code', planCode).single();
+        if (plan) {
+          const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+          let cardDetails: any = {};
+          if (checkoutSession.customer) {
+            try {
+              const pms = await stripe.paymentMethods.list({ customer: checkoutSession.customer as string, type: 'card', limit: 1 });
+              if (pms.data.length > 0) {
+                const c = pms.data[0].card;
+                cardDetails = {
+                  cardBrand: c?.brand ? c.brand.charAt(0).toUpperCase() + c.brand.slice(1) : null,
+                  cardLast4: c?.last4 || null,
+                  cardExpMonth: c?.exp_month || null,
+                  cardExpYear: c?.exp_year || null,
+                  billingEmail: pms.data[0].billing_details?.email || checkoutSession.customer_details?.email || null,
+                };
+              }
+            } catch (err) {}
+          }
+          await supabase.from('CompanySubscription').upsert({
+            companyId: membership.companyId,
+            planId: plan.id,
+            status: 'ACTIVE',
+            stripeSubscriptionId: checkoutSession.subscription as string || checkoutSession.id,
+            stripeCustomerId: (checkoutSession.customer as string) || undefined,
+            extraEndpoints,
+            currentPeriodEnd,
+            ...cardDetails,
+          }, { onConflict: 'companyId' });
+        }
+      }
+    } catch (err) {
+      console.warn('[Billing Page] Error verifying session_id:', err);
+    }
+  }
 
   // Run all queries in parallel to reduce DB connections
   const [

@@ -42,6 +42,12 @@ export function SwitchPlanButton({ planCode, planName, currentPrice, newPrice, i
         return;
       }
 
+      // If Stripe Checkout URL was returned, redirect directly to Stripe!
+      if (json.url) {
+        window.location.href = json.url;
+        return;
+      }
+
       // Success
       router.refresh();
       window.location.href = '/billing?status=updated';
