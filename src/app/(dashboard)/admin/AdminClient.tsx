@@ -5,7 +5,8 @@ import {
   ShieldCheck, Users, Building2, Mail, Send, CheckCircle2,
   AlertTriangle, XCircle, Search, RefreshCw, ChevronRight,
   Sparkles, DollarSign, Calendar, Sliders, Check, ArrowUpDown,
-  ExternalLink, Clock, FileText, ToggleLeft, ToggleRight, X, AlertCircle
+  ExternalLink, Clock, FileText, ToggleLeft, ToggleRight, X, AlertCircle,
+  Eye, Phone, ArrowRight, UserCheck, Inbox, LogIn
 } from 'lucide-react';
 
 interface AdminClientProps {
@@ -30,7 +31,8 @@ interface OverviewData {
     starter: number;
     pro: number;
     business: number;
-    [key: string]: number;
+    superadmin_owner?: number;
+    [key: string]: any;
   };
 }
 
@@ -86,11 +88,38 @@ interface SmsLogRecord {
   createdAt: string;
 }
 
+interface InboundAlertRecord {
+  id: string;
+  subject: string;
+  from: string;
+  receivedAt: string;
+  companyId: string;
+  companyName: string;
+  endpointLabel: string;
+  endpointEmail: string;
+  smsTotal: number;
+  smsDelivered: number;
+  smsFailed: number;
+  bodyPreview: string;
+  bodyText: string;
+}
+
+interface UserDetailsData {
+  company: any;
+  subscription: any;
+  endpoints: any[];
+  recipients: any[];
+  notifications: any[];
+  teamMembers: any[];
+  smsMessages: any[];
+}
+
 const PLAN_OPTIONS = [
   { code: 'free_trial', name: 'Free Trial', price: 0, maxEndpoints: 1, badgeColor: 'bg-gray-100 text-gray-800 border-gray-200' },
   { code: 'starter', name: 'Starter Plan', price: 19, maxEndpoints: 1, badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   { code: 'pro', name: 'Professional Plan', price: 59, maxEndpoints: 5, badgeColor: 'bg-blue-50 text-blue-700 border-blue-200' },
   { code: 'business', name: 'Business Plan', price: 129, maxEndpoints: 15, badgeColor: 'bg-purple-50 text-purple-700 border-purple-200' },
+  { code: 'superadmin_owner', name: 'Platform Owner', price: 0, maxEndpoints: 999999, badgeColor: 'bg-amber-50 text-amber-900 border-amber-300' },
 ];
 
 const STATUS_OPTIONS = [
@@ -101,7 +130,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function AdminClient({ userEmail }: AdminClientProps) {
-  const [activeTab, setActiveTab] = useState<'users' | 'overview' | 'endpoints' | 'sms'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'emails' | 'endpoints' | 'sms' | 'overview'>('users');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -111,13 +140,21 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [endpoints, setEndpoints] = useState<EndpointRecord[]>([]);
   const [smsLogs, setSmsLogs] = useState<SmsLogRecord[]>([]);
+  const [notifications, setNotifications] = useState<InboundAlertRecord[]>([]);
 
   // Search & filter states
   const [userSearch, setUserSearch] = useState('');
   const [planFilter, setPlanFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [emailSearch, setEmailSearch] = useState('');
   const [endpointSearch, setEndpointSearch] = useState('');
   const [smsSearch, setSmsSearch] = useState('');
+
+  // Deep User Monitor state
+  const [inspectingUser, setInspectingUser] = useState<UserRecord | null>(null);
+  const [inspectingDetails, setInspectingDetails] = useState<UserDetailsData | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [monitorSubTab, setMonitorSubTab] = useState<'endpoints' | 'emails' | 'recipients' | 'sms'>('endpoints');
 
   // Manage Plan Modal state
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
@@ -128,28 +165,34 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
   const [modalNotes, setModalNotes] = useState('');
   const [modalSubmitting, setModalSubmitting] = useState(false);
 
+  // Expandable email body state
+  const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null);
+
   // Initial load
   const loadAllData = async () => {
     try {
       setLoading(true);
-      const [overviewRes, usersRes, endpointsRes, smsRes] = await Promise.all([
+      const [overviewRes, usersRes, endpointsRes, smsRes, notifRes] = await Promise.all([
         fetch('/api/admin/overview'),
         fetch('/api/admin/users'),
         fetch('/api/admin/endpoints'),
         fetch('/api/admin/sms-logs'),
+        fetch('/api/admin/notifications?limit=100'),
       ]);
 
-      const [overviewData, usersData, endpointsData, smsData] = await Promise.all([
+      const [overviewData, usersData, endpointsData, smsData, notifData] = await Promise.all([
         overviewRes.json(),
         usersRes.json(),
         endpointsRes.json(),
         smsRes.json(),
+        notifRes.json(),
       ]);
 
       if (overviewData.success && overviewData.data) setOverview(overviewData.data);
       if (usersData.success && usersData.data) setUsers(usersData.data);
       if (endpointsData.success && endpointsData.data) setEndpoints(endpointsData.data);
       if (smsData.success && smsData.data) setSmsLogs(smsData.data);
+      if (notifData.success && notifData.data) setNotifications(notifData.data);
     } catch (err) {
       console.error('Failed to load admin data:', err);
       setActionMessage({ type: 'error', text: 'Failed to load admin data. Please check connection.' });
@@ -166,6 +209,48 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadAllData();
+  };
+
+  // Open deep monitor drawer for user
+  const handleInspectUser = async (user: UserRecord) => {
+    setInspectingUser(user);
+    setInspectingDetails(null);
+    setLoadingDetails(true);
+    setMonitorSubTab('endpoints');
+
+    try {
+      const res = await fetch(`/api/admin/user-details?companyId=${user.companyId || ''}&userId=${user.id}`);
+      const data = await res.json();
+      if (data.success) {
+        setInspectingDetails(data.data);
+      } else {
+        throw new Error(data.error || 'Failed to load user details');
+      }
+    } catch (err: any) {
+      console.error('User inspect error:', err);
+      setActionMessage({ type: 'error', text: err.message || 'Error loading user workspace data' });
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  // Switch workspace into user company
+  const handleSwitchWorkspace = async (companyId: string) => {
+    try {
+      const res = await fetch('/api/admin/switch-workspace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = '/dashboard';
+      } else {
+        throw new Error(data.error || 'Failed to switch workspace');
+      }
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err.message || 'Failed to switch workspace' });
+    }
   };
 
   // Open modal for user
@@ -234,6 +319,30 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
         })
       );
 
+      // If user is currently inspected, update inspected details as well
+      if (inspectingUser && inspectingUser.id === selectedUser.id) {
+        const chosenPlan = PLAN_OPTIONS.find((p) => p.code === modalPlanCode);
+        setInspectingUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                subscription: {
+                  ...(prev.subscription || {
+                    id: 'sub_admin_updated',
+                    planId: null,
+                    stripeSubscriptionId: null,
+                  }),
+                  status: modalStatus,
+                  planCode: modalPlanCode,
+                  planName: chosenPlan?.name || modalPlanCode,
+                  maxActiveEndpoints: chosenPlan?.maxEndpoints || 1,
+                  currentPeriodEnd: data.data?.currentPeriodEnd || null,
+                },
+              }
+            : null
+        );
+      }
+
       // Close modal
       setSelectedUser(null);
     } catch (err: any) {
@@ -290,6 +399,21 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
     });
   }, [users, userSearch, planFilter, statusFilter]);
 
+  // Filtered Notifications / Inbound Emails
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter((n) => {
+      const query = emailSearch.toLowerCase();
+      return (
+        !emailSearch ||
+        n.subject?.toLowerCase().includes(query) ||
+        n.from?.toLowerCase().includes(query) ||
+        n.companyName?.toLowerCase().includes(query) ||
+        n.endpointEmail?.toLowerCase().includes(query) ||
+        n.bodyText?.toLowerCase().includes(query)
+      );
+    });
+  }, [notifications, emailSearch]);
+
   // Filtered Endpoints
   const filteredEndpoints = useMemo(() => {
     return endpoints.filter((ep) => {
@@ -324,7 +448,7 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
     <div className="space-y-6 pb-12">
       {/* Top Header Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-indigo-900/50 relative overflow-hidden">
-        {/* Background glow & shapes */}
+        {/* Background glow */}
         <div className="absolute -top-24 -right-24 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -332,18 +456,18 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
           <div>
             <div className="flex items-center gap-2.5 mb-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Superadmin Command Center
+                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                Platform Owner • Full Master Access
               </span>
               <span className="text-xs text-slate-400">
-                Logged in as <strong className="text-white">{userEmail}</strong>
+                Admin Account: <strong className="text-white">{userEmail}</strong>
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-              Platform Administration & Billing
+              Superadmin Command Center
             </h1>
             <p className="text-sm text-slate-300 mt-1 max-w-2xl">
-              Inspect all workspaces, manage subscriptions, override quotas for offline/Stripe issues, and monitor global alerts in real time.
+              Monitor all platform users, observe inbound email alerts, inspect workspaces, and manage subscription quotas with live overrides.
             </p>
           </div>
 
@@ -354,7 +478,7 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 active:bg-white/20 text-white text-sm font-medium border border-white/10 transition shadow-sm backdrop-blur-sm"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              <span>Refresh Data</span>
+              <span>Refresh Live Data</span>
             </button>
           </div>
         </div>
@@ -438,22 +562,25 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>Users & Subscriptions</span>
+          <span>Users & Workspaces</span>
           <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700">
             {users.length}
           </span>
         </button>
 
         <button
-          onClick={() => setActiveTab('overview')}
+          onClick={() => setActiveTab('emails')}
           className={`flex items-center gap-2 pb-3 px-2 text-sm font-semibold transition border-b-2 whitespace-nowrap ${
-            activeTab === 'overview'
+            activeTab === 'emails'
               ? 'border-indigo-600 text-indigo-600'
               : 'border-transparent text-gray-500 hover:text-gray-900'
           }`}
         >
-          <DollarSign className="w-4 h-4" />
-          <span>Platform Overview</span>
+          <Inbox className="w-4 h-4" />
+          <span>Live Inbound Emails</span>
+          <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">
+            {notifications.length}
+          </span>
         </button>
 
         <button
@@ -485,12 +612,24 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
             {smsLogs.length}
           </span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`flex items-center gap-2 pb-3 px-2 text-sm font-semibold transition border-b-2 whitespace-nowrap ${
+            activeTab === 'overview'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <DollarSign className="w-4 h-4" />
+          <span>Platform MRR & Metrics</span>
+        </button>
       </div>
 
-      {/* TAB 1: USERS & SUBSCRIPTIONS */}
+      {/* TAB 1: USERS & WORKSPACES */}
       {activeTab === 'users' && (
         <div className="space-y-4">
-          {/* Controls / Filter Bar */}
+          {/* Filter Controls */}
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -498,7 +637,7 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
                 type="text"
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
-                placeholder="Search user name, email, or company..."
+                placeholder="Search user name, email, or company workspace..."
                 className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
               />
             </div>
@@ -514,6 +653,7 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
                 <option value="starter">Starter Plan</option>
                 <option value="pro">Professional Plan</option>
                 <option value="business">Business Plan</option>
+                <option value="superadmin_owner">Platform Owner</option>
               </select>
 
               <select
@@ -536,12 +676,12 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50/80 border-b border-gray-100 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                    <th className="py-3.5 px-4 sm:px-6">User & Company</th>
+                    <th className="py-3.5 px-4 sm:px-6">User & Workspace</th>
                     <th className="py-3.5 px-4">Plan</th>
                     <th className="py-3.5 px-4">Status</th>
-                    <th className="py-3.5 px-4">Endpoint Usage</th>
-                    <th className="py-3.5 px-4">SMS Alerts</th>
-                    <th className="py-3.5 px-4">Period End</th>
+                    <th className="py-3.5 px-4">Endpoints</th>
+                    <th className="py-3.5 px-4">SMS Sent</th>
+                    <th className="py-3.5 px-4">Renewal</th>
                     <th className="py-3.5 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -550,7 +690,7 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
                     <tr>
                       <td colSpan={7} className="py-12 text-center text-gray-400">
                         <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
-                        Loading users and subscription statuses...
+                        Loading platform users and activity...
                       </td>
                     </tr>
                   ) : filteredUsers.length === 0 ? (
@@ -561,6 +701,7 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
                     </tr>
                   ) : (
                     filteredUsers.map((user) => {
+                      const isOwnerUser = user.subscription?.planCode === 'superadmin_owner';
                       const planBadge =
                         PLAN_OPTIONS.find((p) => p.code === user.subscription?.planCode)?.badgeColor ||
                         'bg-gray-100 text-gray-700 border-gray-200';
@@ -570,10 +711,10 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
 
                       const activeEp = user.activeEndpoints;
                       const maxEp = user.subscription?.maxActiveEndpoints || 1;
-                      const isAtMax = activeEp >= maxEp;
+                      const isAtMax = activeEp >= maxEp && !isOwnerUser;
 
                       return (
-                        <tr key={user.id} className="hover:bg-gray-50/70 transition-colors">
+                        <tr key={user.id} className="hover:bg-gray-50/70 transition-colors group">
                           {/* User & Company */}
                           <td className="py-4 px-4 sm:px-6">
                             <div className="flex items-center gap-3">
@@ -581,8 +722,13 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
                                 {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
                               </div>
                               <div className="min-w-0">
-                                <p className="font-semibold text-gray-900 truncate">
-                                  {user.name || 'Anonymous User'}
+                                <p className="font-semibold text-gray-900 truncate flex items-center gap-1.5">
+                                  <span>{user.name || 'Anonymous User'}</span>
+                                  {isOwnerUser && (
+                                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                                      OWNER
+                                    </span>
+                                  )}
                                 </p>
                                 <p className="text-xs text-gray-500 truncate">{user.email}</p>
                                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -628,7 +774,7 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
                           <td className="py-4 px-4">
                             <div className="flex items-center gap-2">
                               <span className={`font-bold text-xs ${isAtMax ? 'text-amber-600' : 'text-gray-900'}`}>
-                                {activeEp} / {maxEp}
+                                {activeEp} / {isOwnerUser ? '∞' : maxEp}
                               </span>
                               <span className="text-[11px] text-gray-400">
                                 ({user.totalEndpoints} total)
@@ -639,7 +785,7 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
                                 className={`h-full rounded-full ${
                                   isAtMax ? 'bg-amber-500' : 'bg-indigo-600'
                                 }`}
-                                style={{ width: `${Math.min((activeEp / maxEp) * 100, 100)}%` }}
+                                style={{ width: `${Math.min((activeEp / (isOwnerUser ? 100 : maxEp)) * 100, 100)}%` }}
                               />
                             </div>
                           </td>
@@ -671,15 +817,40 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
                           </td>
 
                           {/* Actions */}
-                          <td className="py-4 px-4 text-right">
-                            <button
-                              onClick={() => openUpgradeModal(user)}
-                              disabled={!user.companyId}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition border border-indigo-200 active:scale-95 disabled:opacity-50"
-                            >
-                              <Sliders className="w-3.5 h-3.5" />
-                              <span>Manage Plan</span>
-                            </button>
+                          <td className="py-4 px-4 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-2">
+                              {/* Monitor Button */}
+                              <button
+                                onClick={() => handleInspectUser(user)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition active:scale-95"
+                                title="Monitor user emails, endpoints, and live activity"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Monitor</span>
+                              </button>
+
+                              {/* Manage Plan Button */}
+                              <button
+                                onClick={() => openUpgradeModal(user)}
+                                disabled={!user.companyId}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition active:scale-95 disabled:opacity-50"
+                                title="Override plan, extend expiry, or adjust status"
+                              >
+                                <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Plan</span>
+                              </button>
+
+                              {/* Switch Workspace */}
+                              {user.companyId && (
+                                <button
+                                  onClick={() => handleSwitchWorkspace(user.companyId!)}
+                                  className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 border border-transparent hover:border-gray-200 transition"
+                                  title="Open live dashboard as this workspace"
+                                >
+                                  <LogIn className="w-3.5 h-3.5 text-gray-400" />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -692,59 +863,95 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
         </div>
       )}
 
-      {/* TAB 2: PLATFORM OVERVIEW */}
-      {activeTab === 'overview' && overview && (
-        <div className="space-y-6">
-          {/* Revenue & Tier Distribution */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {PLAN_OPTIONS.map((plan) => {
-              const count = overview.planCounts?.[plan.code] || 0;
-              const revenue = count * plan.price;
-              return (
-                <div key={plan.code} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${plan.badgeColor}`}>
-                      {plan.name}
-                    </span>
-                    <span className="text-xs font-bold text-gray-400">
-                      Limit: {plan.maxEndpoints} ep
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-extrabold text-gray-900">{count}</span>
-                    <span className="text-xs text-gray-500 font-medium">active workspaces</span>
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-                    <span className="text-gray-500">Plan Rate: ${plan.price}/mo</span>
-                    <span className="font-bold text-emerald-600">+${revenue}/mo MRR</span>
-                  </div>
-                </div>
-              );
-            })}
+      {/* TAB 2: LIVE INBOUND EMAILS FEED */}
+      {activeTab === 'emails' && (
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
+            <Search className="w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={emailSearch}
+              onChange={(e) => setEmailSearch(e.target.value)}
+              placeholder="Search incoming alerts by subject, sender, workspace, or endpoint email..."
+              className="w-full text-sm focus:outline-none"
+            />
           </div>
 
-          {/* SMS & Messaging Health Metrics */}
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs">
-            <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Send className="w-4 h-4 text-indigo-600" />
-              Messaging Pipeline Performance
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 rounded-xl bg-emerald-50/50 border border-emerald-100">
-                <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide">Delivered Successfully</p>
-                <p className="text-2xl font-bold text-emerald-700 mt-1">{overview.deliveredSms}</p>
-                <p className="text-xs text-emerald-600 mt-1">Confirmed delivery</p>
-              </div>
-              <div className="p-4 rounded-xl bg-red-50/50 border border-red-100">
-                <p className="text-xs font-semibold text-red-800 uppercase tracking-wide">Failed Dispatches</p>
-                <p className="text-2xl font-bold text-red-700 mt-1">{overview.failedSms}</p>
-                <p className="text-xs text-red-600 mt-1">Provider or carrier rejections</p>
-              </div>
-              <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-100">
-                <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">Overall Delivery Rate</p>
-                <p className="text-2xl font-bold text-blue-700 mt-1">{overview.deliveryRate}%</p>
-                <p className="text-xs text-blue-600 mt-1">Across all workspaces</p>
-              </div>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50/80 border-b border-gray-100 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    <th className="py-3.5 px-4 sm:px-6">Timestamp</th>
+                    <th className="py-3.5 px-4">Workspace & Endpoint</th>
+                    <th className="py-3.5 px-4">From Sender</th>
+                    <th className="py-3.5 px-4">Subject</th>
+                    <th className="py-3.5 px-4">SMS Dispatched</th>
+                    <th className="py-3.5 px-4 text-right">Details</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-sm">
+                  {filteredNotifications.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-gray-500">
+                        No inbound alerts found matching search.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredNotifications.map((notif) => (
+                      <React.Fragment key={notif.id}>
+                        <tr className="hover:bg-gray-50/70 transition-colors">
+                          <td className="py-4 px-4 sm:px-6 text-xs text-gray-500 whitespace-nowrap">
+                            {new Date(notif.receivedAt).toLocaleString()}
+                          </td>
+                          <td className="py-4 px-4">
+                            <p className="font-semibold text-gray-900 text-xs">{notif.companyName}</p>
+                            <p className="text-[11px] font-mono text-indigo-600 truncate max-w-[200px]" title={notif.endpointEmail}>
+                              {notif.endpointEmail}
+                            </p>
+                          </td>
+                          <td className="py-4 px-4 text-xs font-mono text-gray-700 truncate max-w-[180px]" title={notif.from}>
+                            {notif.from}
+                          </td>
+                          <td className="py-4 px-4 text-xs font-medium text-gray-900">
+                            {notif.subject}
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700">
+                              <Send className="w-3 h-3 text-indigo-600" />
+                              {notif.smsDelivered}/{notif.smsTotal} delivered
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <button
+                              onClick={() => setExpandedEmailId(expandedEmailId === notif.id ? null : notif.id)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 border border-gray-200 transition"
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                              <span>{expandedEmailId === notif.id ? 'Hide' : 'Preview'}</span>
+                            </button>
+                          </td>
+                        </tr>
+                        {expandedEmailId === notif.id && (
+                          <tr className="bg-slate-50 border-b border-gray-200">
+                            <td colSpan={6} className="p-4 sm:px-6">
+                              <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-2">
+                                <div className="flex items-center justify-between text-xs text-gray-500 pb-2 border-b border-gray-100">
+                                  <span>Raw Inbound Email Content:</span>
+                                  <span className="font-mono text-[11px]">{notif.endpointEmail}</span>
+                                </div>
+                                <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                  {notif.bodyText || '(Empty message body)'}
+                                </pre>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -770,7 +977,7 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
                 <thead>
                   <tr className="bg-gray-50/80 border-b border-gray-100 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                     <th className="py-3.5 px-4 sm:px-6">Inbound Email Address</th>
-                    <th className="py-3.5 px-4">Workspace / Company</th>
+                    <th className="py-3.5 px-4">Workspace</th>
                     <th className="py-3.5 px-4">Site / Customer</th>
                     <th className="py-3.5 px-4">Recipients</th>
                     <th className="py-3.5 px-4">Status</th>
@@ -920,6 +1127,355 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
         </div>
       )}
 
+      {/* TAB 5: PLATFORM MRR & OVERVIEW */}
+      {activeTab === 'overview' && overview && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {PLAN_OPTIONS.map((plan) => {
+              const count = overview.planCounts?.[plan.code] || 0;
+              const revenue = count * plan.price;
+              return (
+                <div key={plan.code} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${plan.badgeColor}`}>
+                      {plan.name}
+                    </span>
+                    <span className="text-xs font-bold text-gray-400">
+                      Limit: {plan.maxEndpoints >= 99999 ? '∞' : plan.maxEndpoints} ep
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-extrabold text-gray-900">{count}</span>
+                    <span className="text-xs text-gray-500 font-medium">workspaces</span>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
+                    <span className="text-gray-500">Rate: ${plan.price}/mo</span>
+                    <span className="font-bold text-emerald-600">+${revenue}/mo MRR</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs">
+            <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Send className="w-4 h-4 text-indigo-600" />
+              Global Messaging Performance
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 rounded-xl bg-emerald-50/50 border border-emerald-100">
+                <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide">Delivered Successfully</p>
+                <p className="text-2xl font-bold text-emerald-700 mt-1">{overview.deliveredSms}</p>
+                <p className="text-xs text-emerald-600 mt-1">Confirmed delivery across carriers</p>
+              </div>
+              <div className="p-4 rounded-xl bg-red-50/50 border border-red-100">
+                <p className="text-xs font-semibold text-red-800 uppercase tracking-wide">Failed Dispatches</p>
+                <p className="text-2xl font-bold text-red-700 mt-1">{overview.failedSms}</p>
+                <p className="text-xs text-red-600 mt-1">Twilio or carrier rejections</p>
+              </div>
+              <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-100">
+                <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">Overall Delivery Rate</p>
+                <p className="text-2xl font-bold text-blue-700 mt-1">{overview.deliveryRate}%</p>
+                <p className="text-xs text-blue-600 mt-1">Platform-wide average</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DEEP MONITOR USER & WORKSPACE MODAL */}
+      {inspectingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="px-6 py-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-white font-bold">
+                  {inspectingUser.name ? inspectingUser.name.charAt(0).toUpperCase() : inspectingUser.email.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-lg">{inspectingUser.name || inspectingUser.email}</h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">
+                      {inspectingUser.companyName}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300">
+                    Email: <strong className="text-white">{inspectingUser.email}</strong> • Role: {inspectingUser.role}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {inspectingUser.companyId && (
+                  <button
+                    onClick={() => handleSwitchWorkspace(inspectingUser.companyId!)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-sm transition"
+                    title="Operate as this user inside their dashboard"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>Enter Workspace</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => openUpgradeModal(inspectingUser)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs rounded-xl border border-white/15 transition"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>Change Plan</span>
+                </button>
+                <button
+                  onClick={() => setInspectingUser(null)}
+                  className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick KPI bar for this user */}
+            <div className="bg-indigo-50/70 border-b border-indigo-100 px-6 py-3 flex flex-wrap items-center justify-between gap-4 text-xs">
+              <div className="flex items-center gap-6">
+                <div>
+                  <span className="text-gray-500">Plan:</span>{' '}
+                  <strong className="text-indigo-900 font-bold">{inspectingUser.subscription?.planName || 'Free Trial'}</strong>
+                </div>
+                <div>
+                  <span className="text-gray-500">Status:</span>{' '}
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                    {inspectingUser.subscription?.status || 'ACTIVE'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Endpoints:</span>{' '}
+                  <strong className="text-gray-900">{inspectingDetails?.endpoints.length ?? inspectingUser.activeEndpoints}</strong>
+                </div>
+                <div>
+                  <span className="text-gray-500">Recipients:</span>{' '}
+                  <strong className="text-gray-900">{inspectingDetails?.recipients.length ?? inspectingUser.totalRecipients}</strong>
+                </div>
+                <div>
+                  <span className="text-gray-500">Alerts:</span>{' '}
+                  <strong className="text-gray-900">{inspectingDetails?.notifications.length ?? inspectingUser.totalNotifications}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Inner Subtabs */}
+            <div className="px-6 border-b border-gray-200 flex gap-4 pt-2 bg-gray-50">
+              <button
+                onClick={() => setMonitorSubTab('endpoints')}
+                className={`pb-2.5 text-xs font-bold border-b-2 transition ${
+                  monitorSubTab === 'endpoints'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                Inbound Email Endpoints ({inspectingDetails?.endpoints.length ?? '...'})
+              </button>
+              <button
+                onClick={() => setMonitorSubTab('emails')}
+                className={`pb-2.5 text-xs font-bold border-b-2 transition ${
+                  monitorSubTab === 'emails'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                Inbound Alerts Received ({inspectingDetails?.notifications.length ?? '...'})
+              </button>
+              <button
+                onClick={() => setMonitorSubTab('recipients')}
+                className={`pb-2.5 text-xs font-bold border-b-2 transition ${
+                  monitorSubTab === 'recipients'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                Phone Recipients ({inspectingDetails?.recipients.length ?? '...'})
+              </button>
+              <button
+                onClick={() => setMonitorSubTab('sms')}
+                className={`pb-2.5 text-xs font-bold border-b-2 transition ${
+                  monitorSubTab === 'sms'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                Recent SMS Dispatches ({inspectingDetails?.smsMessages.length ?? '...'})
+              </button>
+            </div>
+
+            {/* Subtab Content Area */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingDetails ? (
+                <div className="py-12 text-center text-gray-400">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
+                  Loading workspace activity data...
+                </div>
+              ) : (
+                <>
+                  {/* SUBTAB: ENDPOINTS */}
+                  {monitorSubTab === 'endpoints' && (
+                    <div className="space-y-3">
+                      {(!inspectingDetails?.endpoints || inspectingDetails.endpoints.length === 0) ? (
+                        <p className="text-center py-8 text-gray-400 text-xs">
+                          This user has not created any inbound email endpoints yet.
+                        </p>
+                      ) : (
+                        <div className="border border-gray-200 rounded-2xl overflow-hidden">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead className="bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase">
+                              <tr>
+                                <th className="py-2.5 px-4">Endpoint Email</th>
+                                <th className="py-2.5 px-4">Site / Customer</th>
+                                <th className="py-2.5 px-4">Status</th>
+                                <th className="py-2.5 px-4 text-right">Created</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 font-medium">
+                              {inspectingDetails.endpoints.map((ep: any) => (
+                                <tr key={ep.id} className="hover:bg-gray-50/50">
+                                  <td className="py-3 px-4 font-mono font-bold text-gray-900">
+                                    {ep.fullEmailAddress}
+                                  </td>
+                                  <td className="py-3 px-4 text-gray-600">
+                                    {ep.site?.name || '—'} {ep.customer?.name ? `(${ep.customer.name})` : ''}
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                        ep.status === 'ACTIVE'
+                                          ? 'bg-emerald-50 text-emerald-700'
+                                          : 'bg-gray-100 text-gray-600'
+                                      }`}
+                                    >
+                                      {ep.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-right text-gray-400">
+                                    {new Date(ep.createdAt).toLocaleDateString()}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* SUBTAB: INBOUND EMAILS */}
+                  {monitorSubTab === 'emails' && (
+                    <div className="space-y-3">
+                      {(!inspectingDetails?.notifications || inspectingDetails.notifications.length === 0) ? (
+                        <p className="text-center py-8 text-gray-400 text-xs">
+                          No inbound email alerts received by this user yet.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {inspectingDetails.notifications.map((n: any) => (
+                            <div key={n.id} className="p-3 rounded-xl border border-gray-200 bg-gray-50/40 text-xs space-y-1">
+                              <div className="flex items-center justify-between text-gray-500 text-[11px]">
+                                <span className="font-semibold text-gray-800">{new Date(n.receivedAt).toLocaleString()}</span>
+                                <span className="font-mono">{n.from}</span>
+                              </div>
+                              <p className="font-bold text-gray-900">{n.subject || '(No Subject)'}</p>
+                              {n.bodyText && (
+                                <p className="text-gray-600 text-[11px] line-clamp-2 bg-white p-2 rounded-lg border border-gray-100 font-mono">
+                                  {n.bodyText}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* SUBTAB: RECIPIENTS */}
+                  {monitorSubTab === 'recipients' && (
+                    <div className="space-y-3">
+                      {(!inspectingDetails?.recipients || inspectingDetails.recipients.length === 0) ? (
+                        <p className="text-center py-8 text-gray-400 text-xs">
+                          No phone recipients configured yet.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {inspectingDetails.recipients.map((r: any) => (
+                            <div key={r.id} className="p-3 rounded-xl border border-gray-200 bg-white text-xs flex items-center justify-between">
+                              <div>
+                                <p className="font-bold text-gray-900">{r.label || 'Contact'}</p>
+                                <p className="font-mono text-indigo-600 font-semibold">{r.phoneE164}</p>
+                              </div>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-50 text-green-700">
+                                Active
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* SUBTAB: SMS DISPATCHES */}
+                  {monitorSubTab === 'sms' && (
+                    <div className="space-y-3">
+                      {(!inspectingDetails?.smsMessages || inspectingDetails.smsMessages.length === 0) ? (
+                        <p className="text-center py-8 text-gray-400 text-xs">
+                          No SMS messages dispatched yet.
+                        </p>
+                      ) : (
+                        <div className="border border-gray-200 rounded-2xl overflow-hidden">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead className="bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase">
+                              <tr>
+                                <th className="py-2.5 px-4">Timestamp</th>
+                                <th className="py-2.5 px-4">Recipient</th>
+                                <th className="py-2.5 px-4">Status</th>
+                                <th className="py-2.5 px-4">Provider SID</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 font-medium">
+                              {inspectingDetails.smsMessages.map((sms: any) => (
+                                <tr key={sms.id} className="hover:bg-gray-50/50">
+                                  <td className="py-3 px-4 text-gray-500">
+                                    {new Date(sms.createdAt).toLocaleTimeString()}
+                                  </td>
+                                  <td className="py-3 px-4 font-mono font-bold text-gray-900">
+                                    {sms.recipient?.phoneE164 || '—'}
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                        sms.status === 'DELIVERED'
+                                          ? 'bg-emerald-50 text-emerald-700'
+                                          : 'bg-blue-50 text-blue-700'
+                                      }`}
+                                    >
+                                      {sms.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 font-mono text-[11px] text-gray-400">
+                                    {sms.providerSid || 'N/A'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MANAGE PLAN / UPGRADE MODAL */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
@@ -985,7 +1541,7 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
                           {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600" />}
                         </div>
                         <p className="text-[11px] text-gray-500 mt-0.5">
-                          ${plan.price}/mo • {plan.maxEndpoints} max endpoint{plan.maxEndpoints > 1 ? 's' : ''}
+                          ${plan.price}/mo • {plan.maxEndpoints >= 99999 ? 'Unlimited' : `${plan.maxEndpoints} endpoints`}
                         </p>
                       </button>
                     );
@@ -1072,7 +1628,7 @@ export default function AdminClient({ userEmail }: AdminClientProps) {
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-start gap-2.5">
                 <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Applying this change immediately modifies the database record. The user will instantly receive the endpoint allowance ({PLAN_OPTIONS.find((p) => p.code === modalPlanCode)?.maxEndpoints} endpoints) upon refreshing their dashboard.
+                  Applying this change immediately updates the database. The user will instantly receive the endpoint allowance upon refreshing their dashboard.
                 </p>
               </div>
 

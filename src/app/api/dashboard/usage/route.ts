@@ -31,7 +31,7 @@ export async function GET() {
   return NextResponse.json({
     data: {
       activeEndpoints: activeCount || 0,
-      maxEndpoints: subscription?.plan?.maxActiveEndpoints ?? 1,
+      maxEndpoints: (subscription?.plan?.maxActiveEndpoints ?? 1) + (subscription?.extraEndpoints ?? 0),
       planName: subscription?.plan?.name ?? 'Starter',
       planStatus: subscription?.status ?? 'ACTIVE',
       notificationsLast24h: last24hNotifs || 0,

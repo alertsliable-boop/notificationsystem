@@ -2,9 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Users, Edit2, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Users, Edit2, Trash2, Loader2, Phone, X, Mail, MapPin } from 'lucide-react';
+import { formatPhoneDisplay } from '@/lib/phone';
 
-interface Customer { id: string; name: string; notes: string | null; _count: { sites: number; endpoints: number }; }
+interface Customer {
+  id: string;
+  name: string;
+  notes: string | null;
+  _count: { sites: number; endpoints: number; recipients?: number };
+}
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -16,6 +22,12 @@ export default function CustomersPage() {
   const [error, setError] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Customer Recipients Drawer State
+  const [selectedCustomerForRecipients, setSelectedCustomerForRecipients] = useState<Customer | null>(null);
+  const [recipientsLoading, setRecipientsLoading] = useState(false);
+  const [customerEndpoints, setCustomerEndpoints] = useState<any[]>([]);
+  const [customerRecipients, setCustomerRecipients] = useState<any[]>([]);
 
   const fetchCustomers = async () => {
     try {
@@ -81,12 +93,28 @@ export default function CustomersPage() {
     setError('');
   };
 
+  const openCustomerRecipients = async (customer: Customer) => {
+    setSelectedCustomerForRecipients(customer);
+    setRecipientsLoading(true);
+
+    try {
+      const res = await fetch(`/api/customers/${customer.id}/recipients`);
+      const json = await res.json();
+      setCustomerEndpoints(json.endpoints || []);
+      setCustomerRecipients(json.recipients || []);
+    } catch (err) {
+      console.error('Error loading customer recipients:', err);
+    } finally {
+      setRecipientsLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-8 max-w-5xl py-4 sm:py-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-[32px] font-bold text-ink-black leading-tight">Customers</h1>
-          <p className="text-smoke mt-1 text-sm tracking-[-0.32px] leading-[1.35]">Organize your inbound endpoints by customer.</p>
+          <p className="text-smoke mt-1 text-sm tracking-[-0.32px] leading-[1.35]">Organize your inbound endpoints and notification recipients by customer.</p>
         </div>
         <button onClick={() => setShowForm(!showForm)} className="inline-flex items-center justify-center gap-2 bg-signal-blue text-white px-5 py-2.5 rounded-full font-semibold text-sm transition-colors self-start sm:self-auto shadow-sm">
           <Plus className="w-4 h-4" /> Add Customer
@@ -134,6 +162,7 @@ export default function CustomersPage() {
                   <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Name</th>
                   <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Sites</th>
                   <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Endpoints</th>
+                  <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Recipients</th>
                   <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider">Notes</th>
                   <th className="px-6 py-3.5 text-xs font-medium text-smoke uppercase tracking-wider text-right">Actions</th>
                 </tr>
@@ -142,11 +171,36 @@ export default function CustomersPage() {
                 {customers.map((c) => (
                   <tr key={c.id} className="hover:bg-ash-mist/50 transition-colors">
                     <td className="px-6 py-4 text-sm font-semibold text-ink-black tracking-[-0.32px]">{c.name}</td>
-                    <td className="px-6 py-4 text-sm text-graphite tracking-[-0.28px]">{c._count.sites}</td>
-                    <td className="px-6 py-4 text-sm text-graphite tracking-[-0.28px]">{c._count.endpoints}</td>
+                    <td className="px-6 py-4 text-sm text-graphite tracking-[-0.28px]">
+                      <Link href={`/sites?customerId=${c.id}`} className="hover:text-signal-blue underline-offset-2 hover:underline">
+                        {c._count.sites} site{c._count.sites === 1 ? '' : 's'}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-graphite tracking-[-0.28px]">
+                      <Link href={`/endpoints?customerId=${c.id}`} className="hover:text-signal-blue underline-offset-2 hover:underline">
+                        {c._count.endpoints} endpoint{c._count.endpoints === 1 ? '' : 's'}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <button
+                        onClick={() => openCustomerRecipients(c)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs transition border border-blue-200"
+                        title="Click to view all recipients for this customer"
+                      >
+                        <Phone className="w-3 h-3" />
+                        <span>{c._count.recipients || 0} recipient{c._count.recipients === 1 ? '' : 's'}</span>
+                      </button>
+                    </td>
                     <td className="px-6 py-4 text-sm text-smoke tracking-[-0.28px] max-w-xs truncate">{c.notes || '—'}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => openCustomerRecipients(c)}
+                          className="p-2 text-smoke hover:text-blue-600 transition-colors"
+                          title="View Customer Recipients"
+                        >
+                          <Users className="w-4 h-4" />
+                        </button>
                         <button onClick={() => handleEdit(c)} className="p-2 text-smoke hover:text-signal-blue transition-colors">
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -163,6 +217,91 @@ export default function CustomersPage() {
         )}
       </div>
       </div>
+
+      {/* Customer Recipients Drawer / Modal */}
+      {selectedCustomerForRecipients && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-100 relative space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between border-b border-gray-100 pb-4">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-lg bg-blue-50 text-blue-600"><Users className="w-5 h-5" /></span>
+                <div>
+                  <h3 className="font-bold text-[18px] text-gray-900 leading-tight">
+                    Customer Recipients — {selectedCustomerForRecipients.name}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Viewing all alert recipients configured across sites and endpoints for {selectedCustomerForRecipients.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedCustomerForRecipients(null)}
+                className="p-2 text-gray-400 hover:text-gray-700 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {recipientsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+              </div>
+            ) : customerRecipients.length === 0 ? (
+              <div className="p-8 rounded-xl border border-dashed border-gray-200 text-center space-y-2">
+                <Phone className="w-8 h-8 text-gray-300 mx-auto" />
+                <p className="text-sm font-semibold text-gray-700">No recipients configured for this customer yet</p>
+                <p className="text-xs text-gray-400">
+                  Assign recipients to sites or endpoints belonging to {selectedCustomerForRecipients.name}.
+                </p>
+                <div className="pt-2">
+                  <Link
+                    href="/sites"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-50 text-blue-700 font-bold text-xs hover:bg-blue-100 transition"
+                  >
+                    Go to Sites to assign recipients →
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                  {customerRecipients.map((item) => (
+                    <div key={item.linkId} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center">
+                          {(item.recipient.label || item.recipient.phoneE164).charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[14px] font-bold text-gray-900">{item.recipient.label || 'No Name'}</span>
+                            <code className="text-[12px] font-mono text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
+                              {formatPhoneDisplay(item.recipient.phoneE164)}
+                            </code>
+                          </div>
+                          <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1">
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-gray-400" />
+                              Site: <strong>{item.endpoint.site?.name || 'Site'}</strong>
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Mail className="w-3 h-3 text-blue-500" />
+                              Endpoint: <strong>{item.endpoint.label || item.endpoint.localPart}</strong>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                        Active
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

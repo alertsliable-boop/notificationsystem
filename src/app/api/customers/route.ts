@@ -18,17 +18,28 @@ export async function GET() {
   const supabase = getAdminClient();
   const { data: customers } = await supabase
     .from('Customer')
-    .select('*, sites:Site(id), endpoints:InboundEndpoint(id)')
+    .select('*, sites:Site(id), endpoints:InboundEndpoint(id, recipients:EndpointRecipient(recipientId))')
     .eq('companyId', ctx.companyId)
     .order('name', { ascending: true });
 
-  const mappedCustomers = (customers || []).map((c: any) => ({
-    ...c,
-    _count: {
-      sites: c.sites?.length || 0,
-      endpoints: c.endpoints?.length || 0
-    }
-  }));
+  const mappedCustomers = (customers || []).map((c: any) => {
+    const endpointsList = c.endpoints || [];
+    const recipientIds = new Set<string>();
+    endpointsList.forEach((ep: any) => {
+      (ep.recipients || []).forEach((r: any) => {
+        if (r.recipientId) recipientIds.add(r.recipientId);
+      });
+    });
+
+    return {
+      ...c,
+      _count: {
+        sites: c.sites?.length || 0,
+        endpoints: endpointsList.length,
+        recipients: recipientIds.size,
+      },
+    };
+  });
 
   return NextResponse.json({ data: mappedCustomers });
 }

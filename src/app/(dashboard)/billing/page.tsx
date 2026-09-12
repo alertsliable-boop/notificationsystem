@@ -7,7 +7,12 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { SwitchPlanButton } from './PlanManager';
+import {
+  SwitchPlanButton,
+  PaymentMethodSection,
+  AdditionalEndpointsManager,
+  ChargeHistorySection,
+} from './PlanManager';
 
 export const metadata = { title: 'Billing & Subscription Plans | Liable Alerts' };
 
@@ -48,10 +53,12 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const dbPlans = rawPlans.length > 0 ? rawPlans : FALLBACK_PLANS;
 
   const currentPlanCode = subscription?.plan?.code;
-  const maxEndpoints = subscription?.plan?.maxActiveEndpoints ?? 1;
+  const baseMax = subscription?.plan?.maxActiveEndpoints ?? 1;
+  const extraEndpoints = subscription?.extraEndpoints ?? 0;
+  const totalMaxEndpoints = baseMax + extraEndpoints;
   const currentActive = activeCount || 0;
-  const usagePct = subscription ? Math.min((currentActive / maxEndpoints) * 100, 100) : 0;
-  const isOverLimit = currentActive > maxEndpoints;
+  const usagePct = subscription ? Math.min((currentActive / totalMaxEndpoints) * 100, 100) : 0;
+  const isOverLimit = currentActive > totalMaxEndpoints;
 
   const getFeatures = (code: string, max: number) => {
     if (code === 'starter') return [`${max} Active Email Endpoint`, '100 SMS messages/mo', 'Up to 10 SMS recipients per endpoint', 'Full Delivery Logs & Audit Trails'];
@@ -66,33 +73,42 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
     recommended: p.code === 'pro'
   }));
 
+  const initialCard = subscription?.cardLast4 ? {
+    brand: subscription.cardBrand || 'Card',
+    last4: subscription.cardLast4,
+    expMonth: subscription.cardExpMonth,
+    expYear: subscription.cardExpYear,
+    cardholderName: '',
+    billingEmail: subscription.billingEmail || '',
+  } : null;
+
   return (
-    <div className="space-y-8 sm:space-y-12 animate-fadeIn max-w-5xl py-4 sm:py-6">
+    <div className="space-y-8 sm:space-y-10 animate-fadeIn max-w-5xl py-4 sm:py-6">
       {/* Success/Cancel Banners */}
       {(status === 'success' || status === 'updated') && (
-        <div className="p-4 mb-6 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3 animate-fadeIn">
+        <div className="p-4 bg-green-50 border border-green-200 rounded-2xl flex items-start gap-3 animate-fadeIn shadow-xs">
           <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
           <div>
             <h3 className="font-semibold text-green-900 text-sm">Subscription Updated Successfully!</h3>
-            <p className="text-green-700 text-xs sm:text-sm mt-1">Your subscription plan has been successfully modified. If you downgraded, the billing change will take effect at the end of your current cycle.</p>
+            <p className="text-green-700 text-xs sm:text-sm mt-1">Your subscription plan and endpoint allowance have been updated and are live across your workspace.</p>
           </div>
         </div>
       )}
       {status === 'cancelled' && (
-        <div className="p-4 mb-6 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 animate-fadeIn">
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 animate-fadeIn shadow-xs">
           <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
           <div>
-            <h3 className="font-semibold text-amber-900 text-sm">Checkout Cancelled</h3>
-            <p className="text-amber-700 text-xs sm:text-sm mt-1">Your payment was cancelled. Your current subscription plan remains unchanged.</p>
+            <h3 className="font-semibold text-amber-900 text-sm">Action Cancelled</h3>
+            <p className="text-amber-700 text-xs sm:text-sm mt-1">Your subscription plan remains unchanged.</p>
           </div>
         </div>
       )}
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl sm:text-[32px] font-bold text-ink-black leading-tight">Billing & Subscription Plans</h1>
+        <h1 className="text-2xl sm:text-[32px] font-bold text-ink-black leading-tight">Billing & Payment Type</h1>
         <p className="text-smoke mt-1.5 text-sm sm:text-base tracking-[-0.32px] leading-relaxed">
-          Manage your subscription tier based on active inbound email accounts
+          Manage your subscription tier, credit card on file, additional endpoints, and view charge history
         </p>
       </div>
 
@@ -103,7 +119,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
           <div>
             <h3 className="font-bold text-red-900 text-sm sm:text-base">Active Account Limit Exceeded</h3>
             <p className="text-red-700 text-xs sm:text-sm mt-1 leading-relaxed">
-              Your company has <strong>{currentActive}</strong> active email accounts, which exceeds your current plan limit of <strong>{maxEndpoints}</strong>. Please upgrade your subscription plan or deactivate surplus endpoints to restore normal notification dispatching.
+              Your company has <strong>{currentActive}</strong> active email accounts, which exceeds your current capacity of <strong>{totalMaxEndpoints}</strong>. Add additional endpoints below for $12/mo or upgrade your plan.
             </p>
           </div>
         </div>
@@ -124,7 +140,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
               <div className="flex-1">
                 <h3 className="font-bold text-red-900 text-sm sm:text-base">Free Trial Has Ended</h3>
                 <p className="text-red-700 text-xs sm:text-sm mt-1 leading-relaxed">
-                  Your free trial ended on <strong>{trialEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>. Your endpoints may stop processing emails. Upgrade now to keep your alerts running.
+                  Your free trial ended on <strong>{trialEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>. Upgrade now to keep your alerts running.
                 </p>
               </div>
               <Link href="#plans" className="flex-shrink-0 px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-xl hover:bg-red-700 transition-colors whitespace-nowrap">
@@ -145,7 +161,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
               </div>
               <p className={`text-xs sm:text-sm leading-relaxed ${isExpiringSoon ? 'text-amber-700' : 'text-blue-700'}`}>
                 Your trial expires on <strong>{trialEnd.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}</strong>.
-                {isExpiringSoon ? ' Upgrade now to avoid service interruption.' : ' Upgrade anytime to unlock all features and keep your alerts running.'}
+                Upgrade anytime to unlock all features and keep your alerts running.
               </p>
             </div>
             {isExpiringSoon && (
@@ -157,7 +173,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
         );
       })()}
 
-      {/* Current Usage Card */}
+      {/* 1. Current Plan & Quota Card */}
       <Card className="border-signal-blue/15 bg-signal-blue/5 shadow-subtle">
         <CardContent className="p-5 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
@@ -167,12 +183,13 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
                   <CreditCard className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-[12px] font-medium text-smoke uppercase tracking-wider">Current Active Subscription</p>
-                  <h2 className="text-xl sm:text-[24px] font-semibold text-ink-black tracking-[-0.48px] leading-tight">{subscription?.plan?.name ?? 'Starter'} Plan</h2>
+                  <p className="text-[12px] font-medium text-smoke uppercase tracking-wider">Active Subscription Tier</p>
+                  <h2 className="text-xl sm:text-[24px] font-semibold text-ink-black tracking-[-0.48px] leading-tight">
+                    {subscription?.plan?.name ?? 'Starter'} Plan
+                  </h2>
                 </div>
               </div>
 
-              {/* Trial End Date shown inside card too */}
               {subscription?.status === 'TRIALING' && subscription?.currentPeriodEnd && (
                 <div className="flex items-center gap-2 mt-2 text-[13px] text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg w-fit">
                   <Clock className="w-3.5 h-3.5 flex-shrink-0" />
@@ -194,8 +211,8 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <div className="flex justify-between text-sm mb-2 tracking-[-0.28px]">
-                <span className="font-medium text-graphite">Active Inbound Email Accounts</span>
-                <span className="font-bold text-ink-black">{currentActive} / {maxEndpoints}</span>
+                <span className="font-medium text-graphite">Total Active Email Accounts</span>
+                <span className="font-bold text-ink-black">{currentActive} / {totalMaxEndpoints}</span>
               </div>
               <div className="w-full bg-ash-mist/80 rounded-full h-3 overflow-hidden p-0.5">
                 <div
@@ -203,15 +220,12 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
                   style={{ width: `${Math.min(usagePct, 100)}%` }}
                 />
               </div>
-              {usagePct >= 80 && !isOverLimit && (
-                <p className="text-[12px] text-amber-700 font-semibold mt-2 flex items-center gap-1">
-                  <Shield className="w-3.5 h-3.5" />
-                  Approaching plan capacity ({currentActive} of {maxEndpoints} endpoints active).
-                </p>
-              )}
+              <p className="text-[12px] text-smoke mt-2">
+                {baseMax} included with {subscription?.plan?.name || 'Starter'} plan {extraEndpoints > 0 && `• +${extraEndpoints} purchased endpoints`}
+              </p>
             </div>
             
-            <div className="space-y-3 border-t pt-4 md:border-t-0 md:pt-0 md:border-l md:pl-6 border-ash-mist/40">
+            <div className="space-y-2.5 border-t pt-4 md:border-t-0 md:pt-0 md:border-l md:pl-6 border-ash-mist/40">
               <div className="flex items-center gap-2 text-sm tracking-[-0.28px]">
                 <Mail className="w-4 h-4 text-signal-blue flex-shrink-0" />
                 <span className="text-graphite">Independent Endpoint Configuration</span>
@@ -225,13 +239,22 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
         </CardContent>
       </Card>
 
+      {/* 2. In-App Payment Method (Credit Card on File) */}
+      <PaymentMethodSection initialCard={initialCard} />
 
-      {/* Pricing Plans */}
-      <div id="plans">
-        <div className="text-center mb-8 sm:mb-12">
+      {/* 3. Additional Single Endpoints ($12/mo each) */}
+      <AdditionalEndpointsManager
+        initialExtra={extraEndpoints}
+        basePlanMax={baseMax}
+        planName={subscription?.plan?.name || 'Starter'}
+      />
+
+      {/* 4. Pricing Plans Grid */}
+      <div id="plans" className="space-y-6 pt-2">
+        <div className="text-center mb-6 sm:mb-8">
           <h2 className="text-2xl sm:text-[28px] font-bold text-ink-black leading-tight">Subscription Plans</h2>
-          <p className="text-smoke mt-2 text-sm sm:text-base tracking-[-0.32px]">
-            Billed transparently based on active inbound email accounts
+          <p className="text-smoke mt-1 text-sm sm:text-base tracking-[-0.32px]">
+            Switch plan anytime — switch takes effect instantly
           </p>
         </div>
 
@@ -290,19 +313,10 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
             );
           })}
         </div>
-
-        <div className="mt-8 p-5 bg-blue-50/50 border border-blue-100 rounded-2xl text-center space-y-2">
-          <p className="text-xs sm:text-sm font-bold text-gray-900">
-            * Note on SMS Counting & Message Segments
-          </p>
-          <p className="text-xs text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            Standard text messages are charged and counted per segment (up to 160 standard characters per segment). If an email notification exceeds 160 characters and is sent out as 2 or more message segments, each segment counts as a message towards your monthly endpoint allowance.
-          </p>
-          <p className="text-[11px] text-gray-400 pt-1">
-            Active email accounts can be toggled on/off at any time in the Endpoints dashboard. Automated billing powered by Stripe.
-          </p>
-        </div>
       </div>
+
+      {/* 5. In-App Billing & Charge History Record */}
+      <ChargeHistorySection />
     </div>
   );
 }

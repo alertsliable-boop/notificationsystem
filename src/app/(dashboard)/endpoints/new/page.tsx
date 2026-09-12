@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Plus, Trash2, Mail, Info, ShieldAlert, Sparkles } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Trash2, Mail, Info, ShieldAlert, Sparkles, Check, Phone } from 'lucide-react';
 import Link from 'next/link';
+import { normalizePhoneE164, formatPhoneDisplay } from '@/lib/phone';
 
 interface Customer { id: string; name: string; }
 interface Site { id: string; name: string; customerId: string; }
+interface SavedRecipient { id: string; phoneE164: string; label: string | null; }
 
 export default function CreateEndpointPage() {
   const router = useRouter();
@@ -17,7 +19,13 @@ export default function CreateEndpointPage() {
   const [severityTag, setSeverityTag] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [siteId, setSiteId] = useState('');
-  const [recipients, setRecipients] = useState(['']);
+  
+  // Selected recipients: can be saved recipient IDs or phone strings
+  const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
+  const [customPhoneNumbers, setCustomPhoneNumbers] = useState<string[]>([]);
+  const [newPhoneInput, setNewPhoneInput] = useState('');
+  const [savedRecipients, setSavedRecipients] = useState<SavedRecipient[]>([]);
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,10 +41,14 @@ export default function CreateEndpointPage() {
       fetch('/api/sites'),
       fetch('/api/endpoints'),
       fetch('/api/dashboard/usage'),
-    ]).then(async ([cr, sr, er, ur]) => {
-      const [cJson, sJson, eJson, uJson] = await Promise.all([cr.json(), sr.json(), er.json(), ur.json()]);
+      fetch('/api/recipients'),
+    ]).then(async ([cr, sr, er, ur, recr]) => {
+      const [cJson, sJson, eJson, uJson, recJson] = await Promise.all([
+        cr.json(), sr.json(), er.json(), ur.json(), recr.json()
+      ]);
       setCustomers(cJson.data || []);
       setSites(sJson.data || []);
+      setSavedRecipients(recJson.data || []);
       
       const activeCount = uJson.data?.activeEndpoints ?? (eJson.data || []).filter((e: any) => e.status === 'ACTIVE').length;
       const maxAllowed = uJson.data?.maxEndpoints ?? 1;
@@ -49,16 +61,31 @@ export default function CreateEndpointPage() {
 
   const filteredSites = customerId ? sites.filter((s) => s.customerId === customerId) : sites;
 
-  const handleAddRecipient = () => setRecipients([...recipients, '']);
-  const handleRemoveRecipient = (i: number) => setRecipients(recipients.filter((_, idx) => idx !== i));
-  const handleRecipientChange = (i: number, v: string) => {
-    const updated = [...recipients];
-    updated[i] = v;
-    setRecipients(updated);
+  const toggleSavedRecipient = (id: string) => {
+    if (selectedRecipientIds.includes(id)) {
+      setSelectedRecipientIds(selectedRecipientIds.filter((item) => item !== id));
+    } else {
+      setSelectedRecipientIds([...selectedRecipientIds, id]);
+    }
+  };
+
+  const handleAddNewCustomPhone = () => {
+    const norm = normalizePhoneE164(newPhoneInput);
+    if (!norm || norm.length < 8) {
+      alert('Please enter a valid phone number');
+      return;
+    }
+    if (!customPhoneNumbers.includes(norm)) {
+      setCustomPhoneNumbers([...customPhoneNumbers, norm]);
+    }
+    setNewPhoneInput('');
+  };
+
+  const handleRemoveCustomPhone = (index: number) => {
+    setCustomPhoneNumbers(customPhoneNumbers.filter((_, idx) => idx !== index));
   };
 
   const handleHandleChange = (val: string) => {
-    // Sanitize string for email handle
     const sanitized = val.toLowerCase().replace(/[^a-z0-9._-]/g, '');
     setCustomHandle(sanitized);
   };
@@ -68,7 +95,6 @@ export default function CreateEndpointPage() {
     setIsLoading(true);
     setError('');
 
-    // Validate required fields
     if (!label.trim()) {
       setError('Label / Friendly name is required.');
       setIsLoading(false);
@@ -81,9 +107,22 @@ export default function CreateEndpointPage() {
       return;
     }
 
-    const cleanRecipients = recipients.map((r) => r.trim()).filter(Boolean).map((r) => (r.startsWith('+') ? r : `+${r}`));
-    if (cleanRecipients.length === 0) {
-      setError('At least one valid phone recipient is required for SMS notifications.');
+    // Combine selected saved recipient IDs and custom normalized phone numbers
+    const allRecipients = [
+      ...selectedRecipientIds,
+      ...customPhoneNumbers,
+    ];
+
+    // If user typed a number in the box but didn't click Add, include it
+    if (newPhoneInput.trim()) {
+      const norm = normalizePhoneE164(newPhoneInput.trim());
+      if (norm && !allRecipients.includes(norm)) {
+        allRecipients.push(norm);
+      }
+    }
+
+    if (allRecipients.length === 0) {
+      setError('Please select at least one recipient phone number to receive alerts.');
       setIsLoading(false);
       return;
     }
@@ -99,7 +138,7 @@ export default function CreateEndpointPage() {
         severityTag: severityTag || undefined, 
         customerId, 
         siteId,
-        recipients: cleanRecipients 
+        recipients: allRecipients 
       }),
     });
 
@@ -108,7 +147,7 @@ export default function CreateEndpointPage() {
     if (!res.ok) {
       if (data.code === 'PLAN_LIMIT_EXCEEDED') {
         setIsAtLimit(true);
-        setError('Subscription plan active email account limit reached. Please upgrade your plan in Billing.');
+        setError('Subscription plan active email account limit reached. Please add additional endpoints in Billing ($12/mo each) or upgrade your plan.');
       } else {
         setError(data.error || 'Failed to create inbound email account.');
       }
@@ -152,85 +191,99 @@ export default function CreateEndpointPage() {
         </div>
       </div>
 
+      {/* Limit Exceeded Alert */}
       {isAtLimit && (
-        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-5 flex items-start gap-3">
-          <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h3 className="font-bold text-amber-900 text-sm">Licensed Limit Reached</h3>
-            <p className="text-xs text-amber-800 mt-1">
-              Your company has reached its maximum active email account allowance under your subscription plan. Upgrade your plan to create more endpoints.
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 flex items-start gap-4">
+          <ShieldAlert className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <h4 className="font-bold text-amber-900 text-sm">Plan Limit Reached</h4>
+            <p className="text-amber-700 text-xs mt-1">
+              You are using <strong>{usageInfo?.active} of {usageInfo?.max}</strong> active endpoints. You can add single endpoints for <strong>$12/month</strong> or upgrade your plan in Billing.
             </p>
-            <Link href="/billing" className="inline-block mt-3 px-4 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 transition-colors">
-              Upgrade Subscription Plan →
+            <Link href="/billing" className="inline-flex items-center gap-1.5 mt-2.5 text-xs font-bold text-amber-900 bg-amber-200 hover:bg-amber-300 px-3 py-1.5 rounded-lg transition-colors">
+              Add Endpoints in Billing →
             </Link>
           </div>
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-        {error && !isAtLimit && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm flex gap-2">
-            <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+      {/* Main Form Card */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 sm:p-8">
+        {error && (
+          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Section 1: Endpoint Identification */}
+          {/* Section 1: Basic Information */}
           <div className="space-y-4">
-            <h3 className="font-bold text-xs uppercase tracking-wider text-gray-400">1 · Email Account Identification</h3>
+            <h3 className="font-bold text-xs uppercase tracking-wider text-gray-400">1 · Account Details</h3>
             
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Friendly Name / Label *</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Label / Friendly Name *</label>
               <input
-                type="text" required value={label} onChange={(e) => setLabel(e.target.value)}
-                placeholder="e.g. Building 1 Generator, Warehouse HVAC, Generator 1"
-                className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                type="text"
+                required
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="e.g. Loews Gables Maintenance Team"
+                className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
+              <p className="text-xs text-gray-500 mt-1">Used to identify this endpoint in your dashboard and notification logs.</p>
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
-                Custom Inbound Email Handle <span className="text-xs text-gray-400 font-normal">(Optional)</span>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                Custom Email Handle <span className="text-gray-400 font-normal">(Optional)</span>
               </label>
-              <div className="flex items-center">
+              <div className="flex items-center rounded-xl border border-gray-300 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
                 <input
                   type="text"
                   value={customHandle}
                   onChange={(e) => handleHandleChange(e.target.value)}
-                  placeholder="e.g. building1, warehouse, generator1"
-                  className="flex-1 border border-gray-300 bg-white rounded-l-xl px-4 py-2.5 text-sm text-gray-900 font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  placeholder={label ? displayedHandle : 'e.g. loewsmaintenance'}
+                  className="flex-1 px-4 py-2.5 text-sm text-gray-900 outline-none font-mono"
                 />
-                <select
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  className="bg-gray-100 border border-l-0 border-gray-300 text-gray-700 font-medium px-3 py-2.5 text-sm font-mono rounded-r-xl outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
-                >
-                  <option value="alarms.liablealerts.com">@alarms.liablealerts.com</option>
-                  <option value="alerts.liablealerts.com">@alerts.liablealerts.com</option>
-                  <option value="liablealerts.com">@liablealerts.com</option>
-                </select>
+                <span className="px-4 py-2.5 bg-gray-50 border-l border-gray-200 text-sm font-mono text-gray-500 select-none">
+                  @{domain}
+                </span>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Leave blank to auto-generate a unique prefix based on your label.</p>
+              <p className="text-xs text-gray-500 mt-1">Leave blank to auto-generate a handle based on your label.</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Customer Assignment *</label>
-                <select value={customerId} onChange={(e) => { setCustomerId(e.target.value); setSiteId(''); }} required
-                  className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                  <option value="">Select customer...</option>
-                  {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Customer *</label>
+                <select
+                  required
+                  value={customerId}
+                  onChange={(e) => {
+                    setCustomerId(e.target.value);
+                    setSiteId('');
+                  }}
+                  className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select a customer...</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Site Assignment *</label>
-                <select value={siteId} onChange={(e) => setSiteId(e.target.value)} required
-                  className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  disabled={!customerId}>
-                  <option value="">Select site{!customerId ? ' (choose customer first)' : ''}...</option>
-                  {filteredSites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Site *</label>
+                <select
+                  required
+                  value={siteId}
+                  onChange={(e) => setSiteId(e.target.value)}
+                  disabled={!customerId}
+                  className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                >
+                  <option value="">{customerId ? 'Select a site...' : 'Select customer first'}</option>
+                  {filteredSites.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -268,29 +321,84 @@ export default function CreateEndpointPage() {
           {/* Section 2: SMS Notification Recipients */}
           <div className="space-y-4">
             <h3 className="font-bold text-xs uppercase tracking-wider text-gray-400">2 · SMS Forwarding Recipients</h3>
-            <p className="text-xs text-gray-600">Enter mobile numbers in E.164 format (e.g. <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-mono">+15551234567</code>)</p>
-            
-            <div className="space-y-2.5">
-              {recipients.map((r, i) => (
-                <div key={i} className="flex gap-2">
-                  <input
-                    type="text" value={r} onChange={(e) => handleRecipientChange(i, e.target.value)}
-                    placeholder="+15551234567"
-                    required={i === 0}
-                    className="flex-1 border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-900 font-mono outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  {recipients.length > 1 && (
-                    <button type="button" onClick={() => handleRemoveRecipient(i)} className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+            <p className="text-xs text-gray-600">Choose from your saved recipients or add a new phone number to receive alerts for this endpoint.</p>
 
-            <button type="button" onClick={handleAddRecipient} className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-semibold py-1">
-              <Plus className="w-4 h-4" /> Add another recipient number
-            </button>
+            {/* Saved Recipients Selector */}
+            {savedRecipients.length > 0 && (
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Select from Saved Recipients:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {savedRecipients.map((r) => {
+                    const isSelected = selectedRecipientIds.includes(r.id);
+                    return (
+                      <div
+                        key={r.id}
+                        onClick={() => toggleSavedRecipient(r.id)}
+                        className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between ${
+                          isSelected
+                            ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-500'
+                            : 'bg-gray-50 hover:bg-gray-100 border-gray-200'
+                        }`}
+                      >
+                        <div className="min-w-0 pr-2">
+                          <p className="text-xs font-bold text-gray-900 truncate">{r.label || 'Recipient'}</p>
+                          <p className="text-[11px] font-mono text-gray-600">{formatPhoneDisplay(r.phoneE164)}</p>
+                        </div>
+                        <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition ${
+                          isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300 bg-white'
+                        }`}>
+                          {isSelected && <Check className="w-3.5 h-3.5" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Custom Phone Numbers List */}
+            {customPhoneNumbers.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Additional Numbers Added:
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {customPhoneNumbers.map((num, i) => (
+                    <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-800 text-xs font-mono font-medium border border-gray-200">
+                      {formatPhoneDisplay(num)}
+                      <button type="button" onClick={() => handleRemoveCustomPhone(i)} className="text-gray-400 hover:text-red-500">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Input to Add New Number */}
+            <div className="pt-2">
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                Add Another Phone Number:
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="tel"
+                  value={newPhoneInput}
+                  onChange={(e) => setNewPhoneInput(e.target.value)}
+                  placeholder="305-753-7770 or +13057537770"
+                  className="flex-1 border border-gray-300 bg-white rounded-xl px-4 py-2 text-sm text-gray-900 font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddNewCustomPhone}
+                  className="px-4 py-2 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl transition"
+                >
+                  Add Number
+                </button>
+              </div>
+            </div>
 
             {/* Compliance callout */}
             <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-[11px] text-blue-900 leading-relaxed space-y-1">
@@ -299,17 +407,6 @@ export default function CreateEndpointPage() {
                 <Link href="/terms" target="_blank" className="text-blue-700 underline font-semibold">Terms and Conditions</Link>
                 {' '}and{' '}
                 <Link href="/privacy" target="_blank" className="text-blue-700 underline font-semibold">Privacy Policy</Link>.
-              </p>
-              <p className="text-blue-800">
-                Mobile information and SMS consent will not be sold or shared with third parties or affiliates for marketing or promotional purposes.
-              </p>
-            </div>
-
-            {/* SMS Segment & Quota Counting Note */}
-            <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 text-[11px] text-amber-900 leading-relaxed space-y-0.5">
-              <p className="font-semibold text-amber-950">SMS Segment & Quota Notice:</p>
-              <p>
-                Text messages are charged and counted per segment (up to 160 standard characters per segment). If an alarm message exceeds 160 characters and splits into 2 message segments, it counts as 2 messages against your endpoint monthly quota.
               </p>
             </div>
           </div>

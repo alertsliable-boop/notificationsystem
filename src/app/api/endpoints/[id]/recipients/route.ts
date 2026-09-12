@@ -3,8 +3,11 @@ import { requireAuth, isUnauthorizedResponse, auditLog } from '@/lib/rbac';
 import { getAdminClient } from '@/lib/supabase';
 import { z } from 'zod';
 
+import { normalizePhoneE164, isValidPhoneE164 } from '@/lib/phone';
+
 const schema = z.object({
-  phoneE164: z.string().min(8),
+  recipientId: z.string().optional(),
+  phoneE164: z.string().optional(),
   label: z.string().optional(),
 });
 
@@ -17,9 +20,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   try {
     const body = await req.json();
-    let { phoneE164, label } = schema.parse(body);
-
-    if (!phoneE164.startsWith('+')) phoneE164 = `+${phoneE164}`;
+    const { recipientId, phoneE164: rawPhone, label } = schema.parse(body);
 
     const supabase = getAdminClient();
 
@@ -33,28 +34,50 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     if (!endpoint) return NextResponse.json({ error: 'Endpoint not found' }, { status: 404 });
 
-    // Find or create phone recipient
-    let { data: recipient } = await supabase
-      .from('PhoneRecipient')
-      .select('*')
-      .eq('companyId', ctx.companyId)
-      .eq('phoneE164', phoneE164)
-      .single();
+    let recipient: any = null;
 
-    if (!recipient) {
-      const { data: newRec } = await supabase
+    if (recipientId) {
+      // Find existing recipient
+      const { data: existingRec } = await supabase
         .from('PhoneRecipient')
-        .insert({
-          companyId: ctx.companyId,
-          phoneE164,
-          label: label || phoneE164,
-        })
-        .select()
+        .select('*')
+        .eq('id', recipientId)
+        .eq('companyId', ctx.companyId)
         .single();
-      recipient = newRec;
+      recipient = existingRec;
+    } else if (rawPhone) {
+      const normalized = normalizePhoneE164(rawPhone);
+      if (!isValidPhoneE164(normalized)) {
+        return NextResponse.json({ error: 'Invalid phone number format' }, { status: 400 });
+      }
+
+      // Find or create phone recipient
+      let { data: existing } = await supabase
+        .from('PhoneRecipient')
+        .select('*')
+        .eq('companyId', ctx.companyId)
+        .eq('phoneE164', normalized)
+        .single();
+
+      if (!existing) {
+        const { data: newRec } = await supabase
+          .from('PhoneRecipient')
+          .insert({
+            companyId: ctx.companyId,
+            phoneE164: normalized,
+            label: label || normalized,
+          })
+          .select()
+          .single();
+        recipient = newRec;
+      } else {
+        recipient = existing;
+      }
     }
 
-    if (!recipient) throw new Error('Failed to create recipient');
+    if (!recipient) {
+      return NextResponse.json({ error: 'Recipient could not be found or created' }, { status: 400 });
+    }
 
     // Link recipient to endpoint
     const { data: link } = await supabase
@@ -92,7 +115,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         });
     }
 
-    await auditLog(ctx, 'ADD_ENDPOINT_RECIPIENT', 'EndpointRecipient', endpointId, { phoneE164 });
+    await auditLog(ctx, 'ADD_ENDPOINT_RECIPIENT', 'EndpointRecipient', endpointId, { recipientId: recipient.id, phoneE164: recipient.phoneE164 });
 
     return NextResponse.json({ success: true, recipient });
   } catch (err: any) {

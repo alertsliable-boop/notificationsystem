@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { getAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
+import { isSuperAdmin } from '@/lib/adminAuth';
 import type { Role } from '@/lib/types';
 
 export interface AuthContext {
@@ -40,10 +41,26 @@ export async function getAuthContext(): Promise<AuthContext | { error: string, d
     return { error: 'No membership found for your account.' };
   }
 
+  let effectiveCompanyId = membership.companyId;
+
+  // If superadmin, check if an active company override is set in cookies
+  if (isSuperAdmin(session.user.email)) {
+    try {
+      const { cookies } = await import('next/headers');
+      const cookieStore = await cookies();
+      const overrideCompanyId = cookieStore.get('admin_active_company_id')?.value;
+      if (overrideCompanyId) {
+        effectiveCompanyId = overrideCompanyId;
+      }
+    } catch {
+      // Ignored in non-request contexts
+    }
+  }
+
   return {
     userId: session.user.id,
-    companyId: membership.companyId,
-    role: membership.role as Role,
+    companyId: effectiveCompanyId,
+    role: (isSuperAdmin(session.user.email) ? 'OWNER' : membership.role) as Role,
   };
 }
 

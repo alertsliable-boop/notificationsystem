@@ -32,10 +32,24 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
 
   // Add Recipient state
   const [showAddRecipient, setShowAddRecipient] = useState(false);
+  const [recipientTab, setRecipientTab] = useState<'saved' | 'new'>('saved');
+  const [savedRecipients, setSavedRecipients] = useState<any[]>([]);
+  const [selectedRecipientId, setSelectedRecipientId] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newLabel, setNewLabel] = useState('');
   const [addingRecipient, setAddingRecipient] = useState(false);
   const [deletingRecipientId, setDeletingRecipientId] = useState<string | null>(null);
+
+  const openAddRecipient = async () => {
+    setShowAddRecipient(true);
+    try {
+      const res = await fetch('/api/recipients');
+      const json = await res.json();
+      setSavedRecipients(json.data || []);
+    } catch (err) {
+      console.error('Error fetching recipients:', err);
+    }
+  };
 
   const handleToggleStatus = async () => {
     setToggling(true);
@@ -73,14 +87,17 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
 
   const handleAddRecipientSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPhone.trim()) return;
-
     setAddingRecipient(true);
+
     try {
+      const body = recipientTab === 'saved'
+        ? { recipientId: selectedRecipientId }
+        : { phoneE164: newPhone.trim(), label: newLabel.trim() || undefined };
+
       const res = await fetch(`/api/endpoints/${endpointId}/recipients`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneE164: newPhone.trim(), label: newLabel.trim() || undefined }),
+        body: JSON.stringify(body),
       });
 
       const json = await res.json();
@@ -92,6 +109,7 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
 
       setNewPhone('');
       setNewLabel('');
+      setSelectedRecipientId('');
       setShowAddRecipient(false);
       router.refresh();
     } catch (err: any) {
@@ -177,7 +195,10 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
             Configured SMS Recipients ({initialRecipients.length})
           </h3>
           <button
-            onClick={() => setShowAddRecipient(!showAddRecipient)}
+            onClick={() => {
+              if (!showAddRecipient) openAddRecipient();
+              else setShowAddRecipient(false);
+            }}
             className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-700 border border-purple-100 text-[11px] font-bold rounded-lg hover:bg-purple-100 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" /> Add Recipient
@@ -187,23 +208,70 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
         {/* Add Recipient Form */}
         {showAddRecipient && (
           <form onSubmit={handleAddRecipientSubmit} className="p-4 bg-purple-50/40 border-b border-purple-100 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input
-                type="text"
-                placeholder="Phone (e.g. +15551234567) *"
-                required
-                value={newPhone}
-                onChange={(e) => setNewPhone(e.target.value)}
-                className="w-full border border-purple-200 bg-white rounded-xl px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-purple-500"
-              />
-              <input
-                type="text"
-                placeholder="Label / Contact Name (Optional)"
-                value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
-                className="w-full border border-purple-200 bg-white rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500"
-              />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setRecipientTab('saved')}
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
+                  recipientTab === 'saved'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'bg-white text-gray-600 border border-purple-200'
+                }`}
+              >
+                Select Saved Recipient
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecipientTab('new')}
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
+                  recipientTab === 'new'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'bg-white text-gray-600 border border-purple-200'
+                }`}
+              >
+                New Phone Number
+              </button>
             </div>
+
+            {recipientTab === 'saved' ? (
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Choose Saved Recipient *
+                </label>
+                <select
+                  required
+                  value={selectedRecipientId}
+                  onChange={(e) => setSelectedRecipientId(e.target.value)}
+                  className="w-full border border-purple-200 bg-white rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">Select a saved recipient...</option>
+                  {savedRecipients.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.label || r.phoneE164} ({r.phoneE164})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  placeholder="Phone (e.g. 305-753-7770 or +13057537770) *"
+                  required
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  className="w-full border border-purple-200 bg-white rounded-xl px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Label / Contact Name (Optional)"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  className="w-full border border-purple-200 bg-white rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+            )}
+
             <p className="text-[11px] text-purple-900/80 leading-relaxed">
               Recipients must provide prior consent to receive operational alerts. Reply STOP to cancel or HELP for help. Mobile info & SMS consent will not be sold or shared for marketing purposes.
             </p>
@@ -217,7 +285,7 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
               </button>
               <button
                 type="submit"
-                disabled={addingRecipient}
+                disabled={addingRecipient || (recipientTab === 'saved' && !selectedRecipientId)}
                 className="px-4 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-1.5"
               >
                 {addingRecipient ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Save Recipient'}

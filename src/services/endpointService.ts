@@ -47,7 +47,9 @@ export async function getSubscriptionUsage(companyId: string) {
       .order('createdAt', { ascending: false }),
   ]);
 
-  const maxActiveEndpoints = subscription?.plan?.maxActiveEndpoints ?? 1;
+  const baseMax = subscription?.plan?.maxActiveEndpoints ?? 1;
+  const extraMax = subscription?.extraEndpoints ?? 0;
+  const maxActiveEndpoints = baseMax + extraMax;
   const currentActive = activeCount || 0;
   const isOverLimit = currentActive > maxActiveEndpoints;
   const remainingSlots = Math.max(0, maxActiveEndpoints - currentActive);
@@ -205,21 +207,42 @@ export async function createEndpoint({
 
   // Upsert and link recipients
   if (recipients && recipients.length > 0) {
-    for (const phone of recipients) {
-      let { data: rec } = await supabase
+    const { normalizePhoneE164 } = await import('@/lib/phone');
+    for (const item of recipients) {
+      if (!item || !item.trim()) continue;
+      const raw = item.trim();
+      let rec: any = null;
+
+      // 1. Check if item is already a recipient ID
+      const { data: recById } = await supabase
         .from('PhoneRecipient')
         .select('*')
         .eq('companyId', companyId)
-        .eq('phoneE164', phone)
+        .eq('id', raw)
         .single();
 
-      if (!rec) {
-        const { data: newRec } = await supabase
+      if (recById) {
+        rec = recById;
+      } else {
+        // 2. Otherwise normalize as phone number
+        const normalized = normalizePhoneE164(raw);
+        let { data: recByPhone } = await supabase
           .from('PhoneRecipient')
-          .insert({ companyId, phoneE164: phone, label: phone })
-          .select()
+          .select('*')
+          .eq('companyId', companyId)
+          .eq('phoneE164', normalized)
           .single();
-        rec = newRec;
+
+        if (!recByPhone) {
+          const { data: newRec } = await supabase
+            .from('PhoneRecipient')
+            .insert({ companyId, phoneE164: normalized, label: normalized })
+            .select()
+            .single();
+          rec = newRec;
+        } else {
+          rec = recByPhone;
+        }
       }
 
       if (rec) {
