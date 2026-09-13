@@ -22,6 +22,10 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { planCode, deactivateEndpointIds = [] } = schema.parse(body);
 
+    if (planCode === 'superadmin_owner' || planCode === 'free_trial') {
+      return NextResponse.json({ error: 'This plan is not available for direct subscription.' }, { status: 400 });
+    }
+
     const supabase = getAdminClient();
 
     // Fetch target plan
@@ -141,7 +145,83 @@ export async function POST(req: Request) {
       });
     }
 
-    // Otherwise (new subscriber, free trial, or no active Stripe subscription), create a Stripe Checkout Session!
+    // If company has a Stripe customer ID with saved default payment method, attempt direct charge/subscription
+    if (currentSub?.stripeCustomerId && isStripeConfigured() && newPlan.stripePriceId) {
+      try {
+        const customer = await stripe.customers.retrieve(currentSub.stripeCustomerId, {
+          expand: ['invoice_settings.default_payment_method'],
+        }) as any;
+
+        const defaultPm = customer?.invoice_settings?.default_payment_method;
+        if (defaultPm) {
+          const directLineItems: any[] = [{ price: newPlan.stripePriceId, quantity: 1 }];
+          if (extraEndpoints > 0) {
+            directLineItems.push({ price: 'price_1UDETs33lejKAXgD3TMm7qgK', quantity: extraEndpoints });
+          }
+
+          const newStripeSub = await stripe.subscriptions.create({
+            customer: currentSub.stripeCustomerId,
+            items: directLineItems,
+            default_payment_method: typeof defaultPm === 'string' ? defaultPm : defaultPm.id,
+            metadata: {
+              companyId: ctx.companyId,
+              planCode: newPlan.code,
+              planId: newPlan.id,
+              extraEndpoints: String(extraEndpoints),
+            },
+          });
+
+          if (newStripeSub.status === 'active' || newStripeSub.status === 'trialing') {
+            const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+            const { data: updatedSub } = await supabase
+              .from('CompanySubscription')
+              .update({
+                planId: newPlan.id,
+                extraEndpoints,
+                status: 'ACTIVE',
+                stripeSubscriptionId: newStripeSub.id,
+                currentPeriodEnd,
+              })
+              .eq('id', currentSub.id)
+              .select('*, plan:SubscriptionPlan(*)')
+              .single();
+
+            await supabase
+              .from('BillingInvoice')
+              .insert({
+                id: nanoid(),
+                companyId: ctx.companyId,
+                invoiceNumber: `INV-SUB-${nanoid(6).toUpperCase()}`,
+                amountCents: newPlan.priceCents + (extraEndpoints * 1200),
+                currency: 'usd',
+                status: 'paid',
+                description: `Plan Switch to ${newPlan.name} Plan (${baseMax} endpoints)${extraEndpoints > 0 ? ` + ${extraEndpoints} Extra Endpoint(s)` : ''}`,
+                cardBrand: currentSub?.cardBrand || 'Card',
+                cardLast4: currentSub?.cardLast4 || '••••',
+                createdAt: new Date().toISOString(),
+              });
+
+            await auditLog(ctx, 'SWITCH_PLAN', 'CompanySubscription', currentSub.id, {
+              previousPlan: currentSub?.plan?.code,
+              newPlan: newPlan.code,
+              extraEndpoints,
+              isUpgrade,
+              directCard: true,
+            });
+
+            return NextResponse.json({
+              success: true,
+              data: updatedSub,
+              message: `Successfully switched to ${newPlan.name} Plan!`,
+            });
+          }
+        }
+      } catch (directErr: any) {
+        console.warn('Direct subscription using saved card failed, falling back to Stripe Checkout:', directErr.message);
+      }
+    }
+
+    // Otherwise (new subscriber, free trial, or no saved payment method), create a Stripe Checkout Session!
     if (!isStripeConfigured()) {
       return NextResponse.json(
         { error: 'Payment processing is temporarily unavailable. Please contact support.' },

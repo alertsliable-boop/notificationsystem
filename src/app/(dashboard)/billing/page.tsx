@@ -5,6 +5,7 @@ import { getAdminClient } from '@/lib/supabase';
 import { stripe, isStripeConfigured } from '@/lib/stripe';
 import { CreditCard, Zap, CheckCircle2, ArrowUpCircle, TrendingUp, Shield, Mail, Users, Clock, Star, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
+import { nanoid } from 'nanoid';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -17,11 +18,13 @@ import {
 
 export const metadata = { title: 'Billing & Subscription Plans | Liable Alerts' };
 
+const VALID_PLAN_ORDER = ['starter', 'pro', 'business'];
+
 // Fallback plan data — shown when DB fetch fails so UI always renders
 const FALLBACK_PLANS = [
-  { code: 'starter', name: 'Starter', priceCents: 1900, maxActiveEndpoints: 1 },
-  { code: 'pro', name: 'Professional', priceCents: 5900, maxActiveEndpoints: 5 },
-  { code: 'business', name: 'Business', priceCents: 12900, maxActiveEndpoints: 15 },
+  { code: 'starter', name: 'Starter', priceCents: 1900, maxActiveEndpoints: 1, stripePriceId: 'price_1UDETm33lejKAXgDyjyOMrsY' },
+  { code: 'pro', name: 'Professional', priceCents: 5900, maxActiveEndpoints: 5, stripePriceId: 'price_1UDETp33lejKAXgDJ3zrLCA1' },
+  { code: 'business', name: 'Business', priceCents: 12900, maxActiveEndpoints: 15, stripePriceId: 'price_1UDETr33lejKAXgDfxId7yMe' },
 ];
 
 export default async function BillingPage({ searchParams }: { searchParams: Promise<{ status?: string; session_id?: string }> }) {
@@ -64,8 +67,13 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
               }
             } catch (err) {}
           }
-          await supabase.from('CompanySubscription').upsert({
-            companyId: membership.companyId,
+          const { data: existingSub } = await supabase
+            .from('CompanySubscription')
+            .select('id')
+            .eq('companyId', membership.companyId)
+            .single();
+
+          const subPayload = {
             planId: plan.id,
             status: 'ACTIVE',
             stripeSubscriptionId: checkoutSession.subscription as string || checkoutSession.id,
@@ -73,7 +81,50 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
             extraEndpoints,
             currentPeriodEnd,
             ...cardDetails,
-          }, { onConflict: 'companyId' });
+          };
+
+          if (existingSub?.id) {
+            await supabase
+              .from('CompanySubscription')
+              .update(subPayload)
+              .eq('id', existingSub.id);
+          } else {
+            await supabase
+              .from('CompanySubscription')
+              .insert({
+                companyId: membership.companyId,
+                ...subPayload,
+              });
+          }
+
+          // Record in-app billing invoice if not already recorded
+          const invoiceId = (checkoutSession.invoice as string) || checkoutSession.id;
+          const { data: existingInvoice } = await supabase
+            .from('BillingInvoice')
+            .select('id')
+            .eq('companyId', membership.companyId)
+            .eq('stripeInvoiceId', invoiceId)
+            .single();
+
+          if (!existingInvoice?.id) {
+            const totalAmount = checkoutSession.amount_total || (plan.priceCents + extraEndpoints * 1200);
+            await supabase
+              .from('BillingInvoice')
+              .insert({
+                id: nanoid(),
+                companyId: membership.companyId,
+                stripeInvoiceId: invoiceId,
+                invoiceNumber: `INV-SUB-${nanoid(6).toUpperCase()}`,
+                amountCents: totalAmount,
+                currency: checkoutSession.currency || 'usd',
+                status: 'paid',
+                description: `Subscription to ${plan.name} Plan (${plan.maxActiveEndpoints} endpoints)${extraEndpoints > 0 ? ` + ${extraEndpoints} Extra Endpoint(s)` : ''}`,
+                cardBrand: cardDetails.cardBrand || 'Card',
+                cardLast4: cardDetails.cardLast4 || '••••',
+                pdfUrl: null,
+                createdAt: new Date().toISOString(),
+              });
+          }
         }
       }
     } catch (err) {
@@ -92,8 +143,11 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
     supabase.from('SubscriptionPlan').select('*').order('priceCents', { ascending: true })
   ]);
   
-  // Use DB plans if available, otherwise fall back to hardcoded plans
-  const rawPlans = (dbPlansData || []).filter((p: any) => p.code !== 'free_trial');
+  // Use DB plans if available, otherwise fall back to hardcoded plans.
+  // Strictly filter to customer tiers (Starter, Professional, Business) and sort in proper ascending sequence.
+  const rawPlans = (dbPlansData || [])
+    .filter((p: any) => VALID_PLAN_ORDER.includes(p.code))
+    .sort((a: any, b: any) => VALID_PLAN_ORDER.indexOf(a.code) - VALID_PLAN_ORDER.indexOf(b.code));
   const dbPlans = rawPlans.length > 0 ? rawPlans : FALLBACK_PLANS;
 
   const currentPlanCode = subscription?.plan?.code;

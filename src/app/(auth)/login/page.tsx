@@ -1,15 +1,17 @@
 'use client';
 
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, Suspense } from 'react';
 import Link from 'next/link';
-import { Mail, Lock, Loader2, Zap, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, Loader2, Zap, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const reason = searchParams.get('reason');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -96,6 +98,19 @@ export default function LoginPage() {
             <p className="text-sm sm:text-base text-gray-600">Sign in to your account to continue</p>
           </div>
 
+          {/* Inactivity sign-out notification banner */}
+          {reason === 'inactivity' && (
+            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 animate-fadeIn">
+              <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-amber-900 text-sm">Session Expired (Inactivity)</h3>
+                <p className="text-amber-700 text-xs mt-0.5 leading-relaxed">
+                  For your security, you were automatically signed out after 5 minutes of inactivity. Please sign in to resume.
+                </p>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-600 font-medium">{error}</p>
@@ -166,3 +181,12 @@ export default function LoginPage() {
     </div>
   );
 }
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+

@@ -69,6 +69,7 @@ class QueryBuilder<T = any> {
   private offsetCount?: number;
   private isSingle = false;
   private isMaybeSingle = false;
+  private upsertOptions?: { onConflict?: string };
 
   constructor(tableName: string) {
     this.tableName = tableName;
@@ -97,9 +98,10 @@ class QueryBuilder<T = any> {
     return this;
   }
 
-  upsert(data: any, options?: any) {
+  upsert(data: any, options?: { onConflict?: string }) {
     this.action = 'upsert';
     this.insertData = data;
+    this.upsertOptions = options;
     return this;
   }
 
@@ -573,9 +575,11 @@ class QueryBuilder<T = any> {
         const vals = Object.values(item);
         const colNames = cols.map(c => `"${c}"`).join(', ');
         const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
-        const updateSets = cols.filter(c => c !== 'id').map(c => `"${c}" = EXCLUDED."${c}"`).join(', ');
 
-        const sql = `INSERT INTO "${this.tableName}" (${colNames}) VALUES (${placeholders}) ON CONFLICT ("id") DO UPDATE SET ${updateSets} RETURNING *`;
+        const conflictTarget = this.upsertOptions?.onConflict || 'id';
+        const updateSets = cols.filter(c => c !== conflictTarget && c !== 'id').map(c => `"${c}" = EXCLUDED."${c}"`).join(', ');
+
+        const sql = `INSERT INTO "${this.tableName}" (${colNames}) VALUES (${placeholders}) ON CONFLICT ("${conflictTarget}") DO UPDATE SET ${updateSets} RETURNING *`;
         const res = await pool.query(sql, vals);
         return { data: res.rows[0], count: 1, error: null };
       }
