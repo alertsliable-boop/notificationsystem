@@ -48,6 +48,45 @@ export default function SitesPage() {
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState('');
 
+  // Quick Add Customer Modal
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerNotes, setNewCustomerNotes] = useState('');
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [addCustomerError, setAddCustomerError] = useState('');
+
+  const handleQuickCreateCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustomerName.trim()) return;
+    setCreatingCustomer(true);
+    setAddCustomerError('');
+
+    try {
+      const res = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newCustomerName.trim(), notes: newCustomerNotes.trim() || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setAddCustomerError(json.error || 'Failed to create customer');
+        setCreatingCustomer(false);
+        return;
+      }
+
+      const created = json.data;
+      setCustomers((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setCustomerId(created.id);
+      setNewCustomerName('');
+      setNewCustomerNotes('');
+      setShowAddCustomerModal(false);
+    } catch (err: any) {
+      setAddCustomerError(err.message || 'Error creating customer');
+    } finally {
+      setCreatingCustomer(false);
+    }
+  };
+
   const fetchData = async () => {
     const [sitesRes, custRes] = await Promise.all([fetch('/api/sites'), fetch('/api/customers')]);
     const [sitesJson, custJson] = await Promise.all([sitesRes.json(), custRes.json()]);
@@ -204,10 +243,33 @@ export default function SitesPage() {
               <input required value={name} onChange={e => setName(e.target.value)} placeholder="North Building" className="w-full border border-ash-mist bg-paper-white rounded-xl px-4 py-2.5 text-sm text-graphite outline-none focus:ring-2 focus:ring-signal-blue/50 focus:border-signal-blue transition-all" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-smoke mb-1.5 tracking-[-0.24px]">Customer *</label>
-              <select required value={customerId} onChange={e => setCustomerId(e.target.value)} className="w-full border border-ash-mist bg-paper-white rounded-xl px-4 py-2.5 text-sm text-graphite outline-none focus:ring-2 focus:ring-signal-blue/50 focus:border-signal-blue transition-all">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-smoke tracking-[-0.24px]">Customer *</label>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCustomerModal(true)}
+                  className="text-xs font-semibold text-signal-blue hover:underline flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" /> New Customer
+                </button>
+              </div>
+              <select
+                required
+                value={customerId}
+                onChange={(e) => {
+                  if (e.target.value === '__add_new__') {
+                    setShowAddCustomerModal(true);
+                  } else {
+                    setCustomerId(e.target.value);
+                  }
+                }}
+                className="w-full border border-ash-mist bg-paper-white rounded-xl px-4 py-2.5 text-sm text-graphite outline-none focus:ring-2 focus:ring-signal-blue/50 focus:border-signal-blue transition-all"
+              >
                 <option value="">Select a customer...</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <option value="__add_new__" className="font-semibold text-signal-blue">+ Add New Customer...</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -487,6 +549,83 @@ export default function SitesPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Inline Add Customer Modal */}
+      {showAddCustomerModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 relative space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-lg bg-blue-50 text-blue-600"><Users className="w-5 h-5" /></span>
+                <h3 className="font-bold text-[17px] text-gray-900">Add New Customer</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddCustomerModal(false);
+                  setAddCustomerError('');
+                }}
+                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {addCustomerError && (
+              <div className="text-red-600 bg-red-50 border border-red-200 text-xs p-3 rounded-xl">
+                {addCustomerError}
+              </div>
+            )}
+
+            <form onSubmit={handleQuickCreateCustomer} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Customer Name *</label>
+                <input
+                  required
+                  autoFocus
+                  type="text"
+                  value={newCustomerName}
+                  onChange={(e) => setNewCustomerName(e.target.value)}
+                  placeholder="e.g. Acme Corporation"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Notes (Optional)</label>
+                <textarea
+                  value={newCustomerNotes}
+                  onChange={(e) => setNewCustomerNotes(e.target.value)}
+                  placeholder="Billing address, account manager, or department..."
+                  rows={2}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddCustomerModal(false);
+                    setAddCustomerError('');
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingCustomer || !newCustomerName.trim()}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50"
+                >
+                  {creatingCustomer ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  {creatingCustomer ? 'Creating...' : 'Save & Select Customer'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

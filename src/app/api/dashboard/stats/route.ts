@@ -46,7 +46,9 @@ export async function GET() {
     return acc;
   }, {});
 
-  const maxEndpoints = subscription?.plan?.maxActiveEndpoints ?? 0;
+  const baseMax = subscription?.plan?.maxActiveEndpoints ?? 1;
+  const extraMax = subscription?.extraEndpoints ?? 0;
+  const maxEndpoints = baseMax + extraMax;
   const smsTodayTotal = Object.values(smsTodayStats).reduce((a: any, b: any) => a + b, 0) as number;
   const smsTotal = Object.values(smsAllStats).reduce((a: any, b: any) => a + b, 0) as number;
   const smsDelivered = smsAllStats['DELIVERED'] || 0;

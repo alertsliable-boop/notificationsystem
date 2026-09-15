@@ -70,10 +70,21 @@ export default function RecipientsPage() {
 
   useEffect(() => { fetchRecipients(); }, [fetchRecipients]);
 
+  const normalizedInput = normalizePhoneE164(phoneE164 || '');
+  const duplicateMatch = normalizedInput 
+    ? recipients.find(r => r.id !== editingId && normalizePhoneE164(r.phoneE164) === normalizedInput)
+    : null;
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError('');
+
+    if (duplicateMatch && !editingId) {
+      setError(`This phone number already exists for "${duplicateMatch.label || duplicateMatch.phoneE164}". Duplicate numbers cannot be added.`);
+      setSaving(false);
+      return;
+    }
 
     const url = editingId ? `/api/recipients/${editingId}` : '/api/recipients';
     const method = editingId ? 'PATCH' : 'POST';
@@ -293,12 +304,26 @@ export default function RecipientsPage() {
                   required
                   type="tel"
                   value={phoneE164}
-                  onChange={(e) => setPhoneE164(e.target.value)}
+                  onChange={(e) => {
+                    setPhoneE164(e.target.value);
+                    if (error) setError('');
+                  }}
                   placeholder="305-753-7770 or +13057537770"
                   disabled={!!editingId}
-                  className="w-full border border-gray-200 bg-gray-50 rounded-xl px-4 py-2.5 text-[14px] text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all font-mono disabled:opacity-60"
+                  className={`w-full border rounded-xl px-4 py-2.5 text-[14px] text-gray-900 outline-none transition-all font-mono disabled:opacity-60 ${
+                    duplicateMatch && !editingId
+                      ? 'border-red-400 bg-red-50/50 focus:ring-2 focus:ring-red-500/30'
+                      : 'border-gray-200 bg-gray-50 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500'
+                  }`}
                 />
-                <p className="text-[11px] text-gray-400 mt-1">Accepts standard 10-digit US numbers or full international format</p>
+                {duplicateMatch && !editingId ? (
+                  <p className="text-[12px] text-red-600 font-semibold mt-1.5 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                    This number is already registered for &quot;{duplicateMatch.label || duplicateMatch.phoneE164}&quot;. Duplicate numbers cannot be added.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-gray-400 mt-1">Accepts standard 10-digit US numbers or full international format</p>
+                )}
               </div>
               <div>
                 <label className="block text-[12px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">

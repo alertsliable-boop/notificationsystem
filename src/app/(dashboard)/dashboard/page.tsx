@@ -71,7 +71,9 @@ export default async function DashboardPage() {
   }, {});
   const smsStats = Object.keys(smsStatsObj).map(status => ({ status, _count: { _all: smsStatsObj[status] } }));
 
-  const maxEndpoints = subscription?.plan?.maxActiveEndpoints ?? 0;
+  const baseMax = subscription?.plan?.maxActiveEndpoints ?? 1;
+  const extraMax = subscription?.extraEndpoints ?? 0;
+  const maxEndpoints = baseMax + extraMax;
   const delivered = smsStatsObj['DELIVERED'] ?? 0;
   const failed = (smsStatsObj['FAILED'] || 0) + (smsStatsObj['UNDELIVERED'] || 0);
   const totalSms = Object.values(smsStatsObj).reduce((sum: any, val: any) => sum + val, 0) as number;
@@ -124,7 +126,7 @@ export default async function DashboardPage() {
   const quickStats = [
     { label: 'Recipients', value: recipientsCount, icon: Phone, href: '/recipients', color: 'text-orange-600', bg: 'bg-orange-50' },
     { label: 'Customers', value: customersCount, icon: Users, href: '/customers', color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { label: 'All Endpoints', value: totalEndpoints, icon: Activity, href: '/endpoints', color: 'text-teal-600', bg: 'bg-teal-50' },
+    { label: 'All Endpoints', value: `${activeEndpoints ?? 0} / ${maxEndpoints}`, icon: Activity, href: '/endpoints', color: 'text-teal-600', bg: 'bg-teal-50' },
   ];
 
   return (

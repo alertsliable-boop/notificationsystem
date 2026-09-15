@@ -28,6 +28,16 @@ export default function CustomersPage() {
   const [recipientsLoading, setRecipientsLoading] = useState(false);
   const [customerEndpoints, setCustomerEndpoints] = useState<any[]>([]);
   const [customerRecipients, setCustomerRecipients] = useState<any[]>([]);
+  const [availableRecipients, setAvailableRecipients] = useState<any[]>([]);
+
+  // Assign Recipient State in Drawer
+  const [assignMode, setAssignMode] = useState<'existing' | 'new'>('existing');
+  const [selectedRecipientId, setSelectedRecipientId] = useState('');
+  const [selectedEndpointId, setSelectedEndpointId] = useState('');
+  const [newRecipientPhone, setNewRecipientPhone] = useState('');
+  const [newRecipientLabel, setNewRecipientLabel] = useState('');
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState('');
 
   const fetchCustomers = async () => {
     try {
@@ -96,16 +106,74 @@ export default function CustomersPage() {
   const openCustomerRecipients = async (customer: Customer) => {
     setSelectedCustomerForRecipients(customer);
     setRecipientsLoading(true);
+    setAssignError('');
+    setSelectedRecipientId('');
+    setNewRecipientPhone('');
+    setNewRecipientLabel('');
 
     try {
       const res = await fetch(`/api/customers/${customer.id}/recipients`);
       const json = await res.json();
       setCustomerEndpoints(json.endpoints || []);
       setCustomerRecipients(json.recipients || []);
+      setAvailableRecipients(json.availableRecipients || []);
+      if (json.endpoints && json.endpoints.length > 0) {
+        setSelectedEndpointId(json.endpoints[0].id);
+      }
     } catch (err) {
       console.error('Error loading customer recipients:', err);
     } finally {
       setRecipientsLoading(false);
+    }
+  };
+
+  const handleAssignRecipient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCustomerForRecipients) return;
+    setAssigning(true);
+    setAssignError('');
+
+    try {
+      const body = assignMode === 'existing'
+        ? { endpointId: selectedEndpointId, recipientId: selectedRecipientId }
+        : { endpointId: selectedEndpointId, phone: newRecipientPhone, label: newRecipientLabel };
+
+      const res = await fetch(`/api/customers/${selectedCustomerForRecipients.id}/recipients`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        setAssignError(json.error || 'Failed to assign recipient');
+        setAssigning(false);
+        return;
+      }
+
+      openCustomerRecipients(selectedCustomerForRecipients);
+      fetchCustomers();
+    } catch (err: any) {
+      setAssignError(err.message || 'Error assigning recipient');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleUnlinkRecipient = async (endpointId: string, recipientId: string) => {
+    if (!selectedCustomerForRecipients) return;
+    if (!confirm('Unlink this recipient from this customer endpoint?')) return;
+
+    try {
+      const res = await fetch(`/api/customers/${selectedCustomerForRecipients.id}/recipients?endpointId=${endpointId}&recipientId=${recipientId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        openCustomerRecipients(selectedCustomerForRecipients);
+        fetchCustomers();
+      }
+    } catch (err) {
+      console.error('Error unlinking recipient:', err);
     }
   };
 
@@ -246,57 +314,191 @@ export default function CustomersPage() {
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
               </div>
-            ) : customerRecipients.length === 0 ? (
-              <div className="p-8 rounded-xl border border-dashed border-gray-200 text-center space-y-2">
-                <Phone className="w-8 h-8 text-gray-300 mx-auto" />
-                <p className="text-sm font-semibold text-gray-700">No recipients configured for this customer yet</p>
-                <p className="text-xs text-gray-400">
-                  Assign recipients to sites or endpoints belonging to {selectedCustomerForRecipients.name}.
-                </p>
-                <div className="pt-2">
-                  <Link
-                    href="/sites"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-50 text-blue-700 font-bold text-xs hover:bg-blue-100 transition"
-                  >
-                    Go to Sites to assign recipients →
-                  </Link>
-                </div>
-              </div>
             ) : (
-              <div className="space-y-4">
-                <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
-                  {customerRecipients.map((item) => (
-                    <div key={item.linkId} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center">
-                          {(item.recipient.label || item.recipient.phoneE164).charAt(0).toUpperCase()}
+              <div className="space-y-6">
+                {/* Section 1: Assigned Recipients List */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                    Active Alert Recipients ({customerRecipients.length})
+                  </h4>
+
+                  {customerRecipients.length === 0 ? (
+                    <div className="p-6 rounded-xl border border-dashed border-gray-200 text-center space-y-2">
+                      <Phone className="w-7 h-7 text-gray-300 mx-auto" />
+                      <p className="text-sm font-semibold text-gray-700">No recipients configured for this customer yet</p>
+                      <p className="text-xs text-gray-400">
+                        {customerEndpoints.length === 0
+                          ? 'This customer does not have any email endpoints yet. Create an endpoint first to route alerts.'
+                          : 'Assign an alert recipient to one of this customer’s endpoints below.'}
+                      </p>
+                      {customerEndpoints.length === 0 && (
+                        <div className="pt-2">
+                          <Link
+                            href={`/endpoints/new`}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition shadow-xs"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Create First Endpoint for Customer →
+                          </Link>
                         </div>
-                        <div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                      {customerRecipients.map((item) => (
+                        <div key={item.linkId} className="p-3.5 flex items-center justify-between hover:bg-gray-50 transition">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center">
+                              {(item.recipient.label || item.recipient.phoneE164).charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[13px] font-bold text-gray-900">{item.recipient.label || 'No Name'}</span>
+                                <code className="text-[11px] font-mono text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
+                                  {formatPhoneDisplay(item.recipient.phoneE164)}
+                                </code>
+                              </div>
+                              <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-0.5">
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3 text-gray-400" />
+                                  Site: <strong>{item.endpoint.site?.name || 'Site'}</strong>
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Mail className="w-3 h-3 text-blue-500" />
+                                  Endpoint: <strong>{item.endpoint.label || item.endpoint.localPart}</strong>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
                           <div className="flex items-center gap-2">
-                            <span className="text-[14px] font-bold text-gray-900">{item.recipient.label || 'No Name'}</span>
-                            <code className="text-[12px] font-mono text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
-                              {formatPhoneDisplay(item.recipient.phoneE164)}
-                            </code>
-                          </div>
-                          <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1">
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3 text-gray-400" />
-                              Site: <strong>{item.endpoint.site?.name || 'Site'}</strong>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                              Active
                             </span>
-                            <span className="flex items-center gap-1">
-                              <Mail className="w-3 h-3 text-blue-500" />
-                              Endpoint: <strong>{item.endpoint.label || item.endpoint.localPart}</strong>
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleUnlinkRecipient(item.endpoint.id, item.recipient.id)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition"
+                              title="Unlink recipient from this endpoint"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 2: Assign / Add Recipient to Endpoint Form */}
+                {customerEndpoints.length > 0 && (
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3">
+                    <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <Plus className="w-3.5 h-3.5 text-blue-600" />
+                      Assign Recipient to Customer Endpoint
+                    </h4>
+
+                    {assignError && (
+                      <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg">
+                        {assignError}
+                      </div>
+                    )}
+
+                    <form onSubmit={handleAssignRecipient} className="space-y-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-1">Target Endpoint *</label>
+                        <select
+                          required
+                          value={selectedEndpointId}
+                          onChange={(e) => setSelectedEndpointId(e.target.value)}
+                          className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          {customerEndpoints.map((ep) => (
+                            <option key={ep.id} value={ep.id}>
+                              {ep.label || ep.localPart} {ep.site?.name ? `(${ep.site.name})` : ''}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
-                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">
-                        Active
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                      <div className="flex gap-4 text-xs font-semibold">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="custAssignMode"
+                            checked={assignMode === 'existing'}
+                            onChange={() => setAssignMode('existing')}
+                            className="text-blue-600"
+                          />
+                          Choose Existing Recipient
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="custAssignMode"
+                            checked={assignMode === 'new'}
+                            onChange={() => setAssignMode('new')}
+                            className="text-blue-600"
+                          />
+                          Add New Phone Number
+                        </label>
+                      </div>
+
+                      {assignMode === 'existing' ? (
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-600 mb-1">Select Recipient *</label>
+                          <select
+                            value={selectedRecipientId}
+                            onChange={(e) => setSelectedRecipientId(e.target.value)}
+                            required={assignMode === 'existing'}
+                            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                          >
+                            <option value="">Select a recipient from company...</option>
+                            {availableRecipients.map((r) => (
+                              <option key={r.id} value={r.id}>
+                                {r.label ? `${r.label} (${r.phoneE164})` : r.phoneE164}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Phone Number (10 digits or E.164) *</label>
+                            <input
+                              required={assignMode === 'new'}
+                              type="tel"
+                              value={newRecipientPhone}
+                              onChange={(e) => setNewRecipientPhone(e.target.value)}
+                              placeholder="305-753-7770"
+                              className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Recipient Name / Label</label>
+                            <input
+                              value={newRecipientLabel}
+                              onChange={(e) => setNewRecipientLabel(e.target.value)}
+                              placeholder="John Smith"
+                              className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="submit"
+                          disabled={assigning || (assignMode === 'existing' && !selectedRecipientId)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition disabled:opacity-50"
+                        >
+                          {assigning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                          {assignMode === 'existing' ? 'Assign Recipient to Customer' : 'Add & Assign Recipient'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -66,25 +66,21 @@ export async function POST(req: Request) {
       .eq('phoneE164', normalized)
       .single();
 
-    let recipient = existing;
-
-    if (!recipient) {
-      const { data: newRec, error: insertError } = await supabase
-        .from('PhoneRecipient')
-        .insert({ companyId: ctx.companyId, phoneE164: normalized, label: label || normalized })
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-      recipient = newRec;
-    } else if (label && (!existing.label || existing.label === existing.phoneE164)) {
-      // Update label if previously bare
-      await supabase
-        .from('PhoneRecipient')
-        .update({ label })
-        .eq('id', existing.id);
-      recipient.label = label;
+    if (existing) {
+      return NextResponse.json(
+        { error: `This phone number (${normalized}) already exists${existing.label ? ` for "${existing.label}"` : ''}. Duplicate numbers cannot be added.` },
+        { status: 409 }
+      );
     }
+
+    const { data: newRec, error: insertError } = await supabase
+      .from('PhoneRecipient')
+      .insert({ companyId: ctx.companyId, phoneE164: normalized, label: label || normalized })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+    const recipient = newRec;
 
     // If endpointId was specified, link recipient to endpoint
     if (endpointId && recipient) {

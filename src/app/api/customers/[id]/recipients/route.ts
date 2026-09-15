@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, isUnauthorizedResponse } from '@/lib/rbac';
+import { requireAuth, isUnauthorizedResponse, auditLog } from '@/lib/rbac';
 import { getAdminClient } from '@/lib/supabase';
+import { normalizePhoneE164, isValidPhoneE164 } from '@/lib/phone';
 
 // GET /api/customers/[id]/recipients
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -69,4 +70,142 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     recipients: recipientsWithEndpoints,
     availableRecipients: allCompanyRecipients || [],
   });
+}
+
+// POST /api/customers/[id]/recipients — Link existing or create new recipient for endpoint under this customer
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireAuth();
+  if (isUnauthorizedResponse(ctx)) return ctx;
+
+  const { id: customerId } = await params;
+  const supabase = getAdminClient();
+
+  try {
+    const body = await req.json();
+    const { endpointId, recipientId, phone, label } = body;
+
+    // Get all endpoints for this customer
+    const { data: customerEndpoints } = await supabase
+      .from('InboundEndpoint')
+      .select('id, label')
+      .eq('customerId', customerId)
+      .eq('companyId', ctx.companyId);
+
+    if (!customerEndpoints || customerEndpoints.length === 0) {
+      return NextResponse.json(
+        { error: 'This customer has no email endpoints yet. Please create an email endpoint for this customer first.' },
+        { status: 400 }
+      );
+    }
+
+    const targetEndpointId = endpointId || customerEndpoints[0].id;
+
+    // Verify endpoint belongs to this customer
+    const validEndpoint = customerEndpoints.find((e: any) => e.id === targetEndpointId);
+    if (!validEndpoint) {
+      return NextResponse.json({ error: 'Endpoint does not belong to this customer' }, { status: 400 });
+    }
+
+    let targetRecipientId = recipientId;
+
+    if (!targetRecipientId) {
+      // Creating a new recipient
+      const normalized = normalizePhoneE164(phone || '');
+      if (!normalized || !isValidPhoneE164(normalized)) {
+        return NextResponse.json({ error: 'Invalid phone number. Use standard 10-digit format or E.164 (e.g. 305-753-7770 or +13057537770).' }, { status: 400 });
+      }
+
+      // Check if already exists
+      const { data: existing } = await supabase
+        .from('PhoneRecipient')
+        .select('id')
+        .eq('companyId', ctx.companyId)
+        .eq('phoneE164', normalized)
+        .single();
+
+      if (existing) {
+        targetRecipientId = existing.id;
+      } else {
+        const { data: newRec, error: createError } = await supabase
+          .from('PhoneRecipient')
+          .insert({
+            companyId: ctx.companyId,
+            phoneE164: normalized,
+            label: label || normalized,
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        targetRecipientId = newRec.id;
+      }
+    }
+
+    // Link recipient to endpoint
+    const { data: existingLink } = await supabase
+      .from('EndpointRecipient')
+      .select('id')
+      .eq('endpointId', targetEndpointId)
+      .eq('recipientId', targetRecipientId)
+      .single();
+
+    if (!existingLink) {
+      await supabase
+        .from('EndpointRecipient')
+        .insert({
+          endpointId: targetEndpointId,
+          recipientId: targetRecipientId,
+        });
+    }
+
+    await auditLog(ctx, 'ASSIGN_CUSTOMER_RECIPIENT', 'EndpointRecipient', targetEndpointId, {
+      customerId,
+      recipientId: targetRecipientId,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    console.error('Error assigning customer recipient:', err);
+    return NextResponse.json({ error: err.message || 'Failed to assign recipient' }, { status: 500 });
+  }
+}
+
+// DELETE /api/customers/[id]/recipients — Remove recipient from endpoint under this customer
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireAuth();
+  if (isUnauthorizedResponse(ctx)) return ctx;
+
+  const { id: customerId } = await params;
+  const { searchParams } = new URL(req.url, 'http://localhost');
+  const endpointId = searchParams.get('endpointId');
+  const recipientId = searchParams.get('recipientId');
+
+  if (!endpointId || !recipientId) {
+    return NextResponse.json({ error: 'endpointId and recipientId are required' }, { status: 400 });
+  }
+
+  const supabase = getAdminClient();
+
+  // Verify endpoint belongs to this customer
+  const { data: endpoint } = await supabase
+    .from('InboundEndpoint')
+    .select('id')
+    .eq('id', endpointId)
+    .eq('customerId', customerId)
+    .eq('companyId', ctx.companyId)
+    .single();
+
+  if (!endpoint) {
+    return NextResponse.json({ error: 'Endpoint not found for this customer' }, { status: 404 });
+  }
+
+  await supabase
+    .from('EndpointRecipient')
+    .delete()
+    .eq('endpointId', endpointId)
+    .eq('recipientId', recipientId);
+
+  await auditLog(ctx, 'UNLINK_CUSTOMER_RECIPIENT', 'EndpointRecipient', endpointId, { customerId, recipientId });
+
+  return NextResponse.json({ success: true });
 }

@@ -421,6 +421,27 @@ export function AdditionalEndpointsManager({
   const [msg, setMsg] = useState('');
   const router = useRouter();
 
+  // Purchase Confirmation Modal State
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [paymentInfo, setPaymentInfo] = useState<{ hasPaymentMethod: boolean; card: any } | null>(null);
+  const [loadingPayment, setLoadingPayment] = useState(false);
+  const [confirmError, setConfirmError] = useState('');
+
+  const handleOpenConfirmModal = async () => {
+    setShowConfirmModal(true);
+    setLoadingPayment(true);
+    setConfirmError('');
+    try {
+      const res = await fetch('/api/billing/payment-method');
+      const json = await res.json();
+      setPaymentInfo(json);
+    } catch (err) {
+      console.error('Failed to load payment info:', err);
+    } finally {
+      setLoadingPayment(false);
+    }
+  };
+
   const handleUpdateCapacity = async (newCount: number) => {
     setSaving(true);
     setMsg('');
@@ -534,7 +555,7 @@ export function AdditionalEndpointsManager({
 
           <button
             type="button"
-            onClick={() => handleUpdateCapacity(selectedCount)}
+            onClick={handleOpenConfirmModal}
             disabled={saving || !hasChanged}
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
               hasChanged
@@ -547,6 +568,130 @@ export function AdditionalEndpointsManager({
           </button>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <CreditCard className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-bold text-[17px] text-gray-900">Confirm Endpoint Capacity Purchase</h3>
+                  <p className="text-xs text-gray-500">Review charge details and billing proration</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {confirmError && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {confirmError}
+              </div>
+            )}
+
+            {/* Summary Box */}
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-gray-500 font-medium">New Total Capacity:</span>
+                <span className="font-bold text-gray-900">{totalCapacity} Endpoints ({basePlanMax} plan + {selectedCount} extra)</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-gray-500 font-medium">Capacity Adjustment:</span>
+                <span className="font-bold text-blue-600">
+                  {selectedCount - extraCount > 0 ? `+${selectedCount - extraCount}` : `${selectedCount - extraCount}`} Endpoints ($12.00/mo each)
+                </span>
+              </div>
+              <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
+                <span className="text-xs font-bold text-gray-900">New Monthly Cost:</span>
+                <span className="text-sm font-bold text-blue-700">+${monthlyCost.toFixed(2)}/mo</span>
+              </div>
+            </div>
+
+            {/* Proration Explanation */}
+            <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-900 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                How Stripe Billing &amp; Proration Works:
+              </p>
+              <p className="text-[11.5px] leading-relaxed text-blue-800">
+                {selectedCount > extraCount ? (
+                  <>You will be charged a <strong>prorated amount immediately</strong> for the remainder of your current monthly billing period. Subsequent renewals will bill the full updated rate (${monthlyCost.toFixed(2)}/mo).</>
+                ) : (
+                  <>Unused days for removed endpoints will be <strong>credited to your account balance</strong> and automatically deducted from your next monthly renewal bill.</>
+                )}
+              </p>
+            </div>
+
+            {/* Payment Method Status */}
+            <div className="border border-gray-200 rounded-xl p-3.5 space-y-2">
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Payment Method</span>
+              {loadingPayment ? (
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Verifying payment method...
+                </div>
+              ) : paymentInfo?.hasPaymentMethod ? (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-gray-900">
+                    <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-mono text-[10px] rounded font-bold">
+                      {paymentInfo.card.brand}
+                    </span>
+                    <span>•••• •••• •••• {paymentInfo.card.last4}</span>
+                    <span className="text-gray-400 font-normal">(Exp {paymentInfo.card.expMonth}/{paymentInfo.card.expYear})</span>
+                  </div>
+                  <span className="text-[11px] text-green-700 font-bold bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
+                    Ready to charge
+                  </span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-lg font-medium flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    No credit card on file. Please add your payment method in the Payment Method section below to complete this purchase.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={saving}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedCount > extraCount && !paymentInfo?.hasPaymentMethod) {
+                    setConfirmError('Please add a credit card in the Payment Method section below before confirming.');
+                    return;
+                  }
+                  setShowConfirmModal(false);
+                  handleUpdateCapacity(selectedCount);
+                }}
+                disabled={saving || (selectedCount > extraCount && !paymentInfo?.hasPaymentMethod)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CreditCard className="w-3.5 h-3.5" />}
+                Confirm &amp; Charge Capacity
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

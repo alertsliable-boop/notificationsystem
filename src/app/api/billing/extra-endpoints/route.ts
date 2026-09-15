@@ -41,10 +41,20 @@ export async function POST(req: Request) {
 
     const addedQty = newExtra - currentExtra;
 
+    // If purchasing additional endpoints, verify that a payment method is on file
+    const hasPaymentMethod = !!(sub.cardLast4 || sub.stripeCustomerId || sub.stripeSubscriptionId);
+    if (addedQty > 0 && !hasPaymentMethod && isStripeConfigured()) {
+      return NextResponse.json(
+        { error: 'No credit card on file. Please add a payment method in the Payment Method section before purchasing additional endpoints.' },
+        { status: 400 }
+      );
+    }
+
     // Additional endpoint price in Stripe ($12/month = 1200 cents)
     const STRIPE_EXTRA_ENDPOINT_PRICE_ID = process.env.STRIPE_EXTRA_ENDPOINT_PRICE_ID || 'price_1UDETs33lejKAXgD3TMm7qgK';
 
-    // Update Stripe subscription item if active subscription exists
+    // 1. Update Stripe subscription item if active subscription exists
+    let stripeInvoiceId: string | null = null;
     if (sub.stripeSubscriptionId && !sub.stripeSubscriptionId.startsWith('mock_') && isStripeConfigured()) {
       try {
         const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
@@ -71,11 +81,48 @@ export async function POST(req: Request) {
         } else if (existingItem) {
           // Extra count set to 0, delete item
           await stripe.subscriptionItems.del(existingItem.id, {
-            proration_behavior: 'none',
+            proration_behavior: 'always_invoice',
           });
         }
       } catch (stripeErr: any) {
         console.warn('Could not update Stripe subscription for extra endpoints:', stripeErr.message);
+      }
+    } else if (sub.stripeCustomerId && addedQty > 0 && isStripeConfigured()) {
+      // If customer has a Stripe Customer ID with card on file but no active Stripe Subscription ID yet
+      try {
+        const customer = await stripe.customers.retrieve(sub.stripeCustomerId, {
+          expand: ['invoice_settings.default_payment_method'],
+        }) as any;
+
+        const defaultPm = customer?.invoice_settings?.default_payment_method;
+        if (defaultPm) {
+          // Create Stripe Subscription for this company
+          const planPriceId = sub.plan?.stripePriceId || 'price_1UDETm33lejKAXgDyjyOMrsY';
+          const items: any[] = [{ price: planPriceId, quantity: 1 }];
+          if (newExtra > 0) {
+            items.push({ price: STRIPE_EXTRA_ENDPOINT_PRICE_ID, quantity: newExtra });
+          }
+
+          const newSub = await stripe.subscriptions.create({
+            customer: sub.stripeCustomerId,
+            items,
+            default_payment_method: typeof defaultPm === 'string' ? defaultPm : defaultPm.id,
+            metadata: {
+              companyId: ctx.companyId,
+              extraEndpoints: String(newExtra),
+            },
+          });
+
+          await supabase
+            .from('CompanySubscription')
+            .update({
+              stripeSubscriptionId: newSub.id,
+              status: 'ACTIVE',
+            })
+            .eq('id', sub.id);
+        }
+      } catch (custErr: any) {
+        console.warn('Could not create Stripe subscription with saved card:', custErr.message);
       }
     }
 

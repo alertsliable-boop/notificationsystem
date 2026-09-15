@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Plus, Trash2, Mail, Info, ShieldAlert, Sparkles, Check, Phone } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Trash2, Mail, Info, ShieldAlert, Sparkles, Check, Phone, X, Users, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { normalizePhoneE164, formatPhoneDisplay } from '@/lib/phone';
 
@@ -33,7 +33,86 @@ export default function CreateEndpointPage() {
   const [isAtLimit, setIsAtLimit] = useState(false);
   const [usageInfo, setUsageInfo] = useState<{ active: number; max: number } | null>(null);
 
+  // Quick Add Customer Modal
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerNotes, setNewCustomerNotes] = useState('');
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [addCustomerError, setAddCustomerError] = useState('');
+
+  // Quick Add Site Modal
+  const [showAddSiteModal, setShowAddSiteModal] = useState(false);
+  const [newSiteName, setNewSiteName] = useState('');
+  const [newSiteAddress, setNewSiteAddress] = useState('');
+  const [creatingSite, setCreatingSite] = useState(false);
+  const [addSiteError, setAddSiteError] = useState('');
+
   const SEVERITY_OPTIONS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+
+  const handleQuickCreateCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustomerName.trim()) return;
+    setCreatingCustomer(true);
+    setAddCustomerError('');
+
+    try {
+      const res = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newCustomerName.trim(), notes: newCustomerNotes.trim() || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setAddCustomerError(json.error || 'Failed to create customer');
+        setCreatingCustomer(false);
+        return;
+      }
+
+      const created = json.data;
+      setCustomers((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setCustomerId(created.id);
+      setSiteId('');
+      setNewCustomerName('');
+      setNewCustomerNotes('');
+      setShowAddCustomerModal(false);
+    } catch (err: any) {
+      setAddCustomerError(err.message || 'Error creating customer');
+    } finally {
+      setCreatingCustomer(false);
+    }
+  };
+
+  const handleQuickCreateSite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSiteName.trim() || !customerId) return;
+    setCreatingSite(true);
+    setAddSiteError('');
+
+    try {
+      const res = await fetch('/api/sites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newSiteName.trim(), address: newSiteAddress.trim() || undefined, customerId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setAddSiteError(json.error || 'Failed to create site');
+        setCreatingSite(false);
+        return;
+      }
+
+      const created = json.data;
+      setSites((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setSiteId(created.id);
+      setNewSiteName('');
+      setNewSiteAddress('');
+      setShowAddSiteModal(false);
+    } catch (err: any) {
+      setAddSiteError(err.message || 'Error creating site');
+    } finally {
+      setCreatingSite(false);
+    }
+  };
 
   useEffect(() => {
     Promise.all([
@@ -254,17 +333,31 @@ export default function CreateEndpointPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Customer *</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-semibold text-gray-700">Customer *</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCustomerModal(true)}
+                    className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> New Customer
+                  </button>
+                </div>
                 <select
                   required
                   value={customerId}
                   onChange={(e) => {
-                    setCustomerId(e.target.value);
-                    setSiteId('');
+                    if (e.target.value === '__add_new__') {
+                      setShowAddCustomerModal(true);
+                    } else {
+                      setCustomerId(e.target.value);
+                      setSiteId('');
+                    }
                   }}
                   className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">Select a customer...</option>
+                  <option value="__add_new__" className="font-semibold text-blue-600">+ Add New Customer...</option>
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
@@ -272,15 +365,35 @@ export default function CreateEndpointPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Site *</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-semibold text-gray-700">Site *</label>
+                  {customerId && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddSiteModal(true)}
+                      className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> New Site
+                    </button>
+                  )}
+                </div>
                 <select
                   required
                   value={siteId}
-                  onChange={(e) => setSiteId(e.target.value)}
+                  onChange={(e) => {
+                    if (e.target.value === '__add_new__') {
+                      setShowAddSiteModal(true);
+                    } else {
+                      setSiteId(e.target.value);
+                    }
+                  }}
                   disabled={!customerId}
                   className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
                 >
                   <option value="">{customerId ? 'Select a site...' : 'Select customer first'}</option>
+                  {customerId && (
+                    <option value="__add_new__" className="font-semibold text-blue-600">+ Add New Site...</option>
+                  )}
                   {filteredSites.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
@@ -422,6 +535,164 @@ export default function CreateEndpointPage() {
           </div>
         </form>
       </div>
+      {/* Inline Add Customer Modal */}
+      {showAddCustomerModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 relative space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-lg bg-blue-50 text-blue-600"><Users className="w-5 h-5" /></span>
+                <h3 className="font-bold text-[17px] text-gray-900">Add New Customer</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddCustomerModal(false);
+                  setAddCustomerError('');
+                }}
+                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {addCustomerError && (
+              <div className="text-red-600 bg-red-50 border border-red-200 text-xs p-3 rounded-xl">
+                {addCustomerError}
+              </div>
+            )}
+
+            <form onSubmit={handleQuickCreateCustomer} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Customer Name *</label>
+                <input
+                  required
+                  autoFocus
+                  type="text"
+                  value={newCustomerName}
+                  onChange={(e) => setNewCustomerName(e.target.value)}
+                  placeholder="e.g. Acme Corporation"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Notes (Optional)</label>
+                <textarea
+                  value={newCustomerNotes}
+                  onChange={(e) => setNewCustomerNotes(e.target.value)}
+                  placeholder="Billing address, account manager, or department..."
+                  rows={2}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddCustomerModal(false);
+                    setAddCustomerError('');
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingCustomer || !newCustomerName.trim()}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50"
+                >
+                  {creatingCustomer ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  {creatingCustomer ? 'Creating...' : 'Save & Select Customer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Inline Add Site Modal */}
+      {showAddSiteModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 relative space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-lg bg-blue-50 text-blue-600"><MapPin className="w-5 h-5" /></span>
+                <div>
+                  <h3 className="font-bold text-[17px] text-gray-900">Add New Site</h3>
+                  <p className="text-xs text-gray-500">
+                    For Customer: <strong>{customers.find(c => c.id === customerId)?.name || 'Selected Customer'}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddSiteModal(false);
+                  setAddSiteError('');
+                }}
+                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {addSiteError && (
+              <div className="text-red-600 bg-red-50 border border-red-200 text-xs p-3 rounded-xl">
+                {addSiteError}
+              </div>
+            )}
+
+            <form onSubmit={handleQuickCreateSite} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Site Name *</label>
+                <input
+                  required
+                  autoFocus
+                  type="text"
+                  value={newSiteName}
+                  onChange={(e) => setNewSiteName(e.target.value)}
+                  placeholder="e.g. Building A - Central Plant"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Site Address (Optional)</label>
+                <input
+                  type="text"
+                  value={newSiteAddress}
+                  onChange={(e) => setNewSiteAddress(e.target.value)}
+                  placeholder="e.g. 100 Main St, Suite 400"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddSiteModal(false);
+                    setAddSiteError('');
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingSite || !newSiteName.trim()}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50"
+                >
+                  {creatingSite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  {creatingSite ? 'Creating...' : 'Save & Select Site'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
