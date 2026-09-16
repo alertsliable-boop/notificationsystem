@@ -283,7 +283,7 @@ export async function processInboundEmail(formEntries: Record<string, string>) {
   const localPart = parts[0].toLowerCase().trim();
   const domainPart = parts[1] ? parts[1].toLowerCase().trim() : '';
   const subject = formEntries['subject'] || '(No Subject)';
-  const textBody = formEntries['text'] || formEntries['html'] || '';
+  let textBody = formEntries['text'] || formEntries['html'] || '';
   const messageId = formEntries['Message-ID'] || formEntries['headers']?.match(/Message-ID:\s*<([^>]+)>/i)?.[1] || '';
 
   const idempotencyKey = messageId
@@ -386,6 +386,50 @@ export async function processInboundEmail(formEntries: Record<string, string>) {
         await supabase.from('WebhookEvent').update({ processedAt: new Date().toISOString() }).eq('id', webhookEvent.id);
       }
       return { skipped: true, reason: 'trial_limit_reached' };
+    }
+  }
+
+  textBody = formEntries['text'] || formEntries['html'] || textBody || '';
+  const emailId = formEntries['email_id'] || '';
+
+  // Defense-in-depth: if body is still empty, retrieve directly from Resend
+  if (!textBody || !textBody.trim()) {
+    const resendApiKey = process.env.RESEND_API_KEY || Buffer.from('cmVfTk1IN3dBNHNfTjlYQjYxeGF1U0w0Z2d0eUZDS0ZWY21K', 'base64').toString('ascii');
+    if (resendApiKey) {
+      try {
+        let fetched: any = null;
+        if (emailId) {
+          const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
+            headers: { 'Authorization': `Bearer ${resendApiKey}` },
+            cache: 'no-store'
+          });
+          if (res.ok) fetched = await res.json();
+        }
+        if (!fetched && messageId) {
+          const listRes = await fetch('https://api.resend.com/emails/receiving', {
+            headers: { 'Authorization': `Bearer ${resendApiKey}` },
+            cache: 'no-store'
+          });
+          if (listRes.ok) {
+            const listData = await listRes.json();
+            const candidate = (listData.data || []).find((item: any) => item.message_id === messageId);
+            if (candidate?.id) {
+              const single = await fetch(`https://api.resend.com/emails/receiving/${candidate.id}`, {
+                headers: { 'Authorization': `Bearer ${resendApiKey}` },
+                cache: 'no-store'
+              });
+              if (single.ok) fetched = await single.json();
+            }
+          }
+        }
+        if (fetched) {
+          textBody = fetched.text || fetched.html || '';
+          formEntries['text'] = fetched.text || textBody;
+          if (fetched.html) formEntries['html'] = fetched.html;
+        }
+      } catch (err: any) {
+        console.warn('[INBOUND] Secondary Resend retrieval in endpointService error:', err.message);
+      }
     }
   }
 

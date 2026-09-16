@@ -71,13 +71,29 @@ export async function processSmsFanout(job: Job) {
     return;
   }
 
+  let messageContent = notification.normalizedMessage || '';
+  if (!messageContent.trim()) {
+    try {
+      const { data: payload } = await supabase
+        .from('NotificationPayload')
+        .select('rawText, rawHtml')
+        .eq('notificationId', notification.id)
+        .maybeSingle();
+      if (payload?.rawText && payload.rawText.trim()) {
+        messageContent = payload.rawText.trim();
+      } else if (payload?.rawHtml && payload.rawHtml.trim()) {
+        messageContent = payload.rawHtml.replace(/<[^>]+>/g, '').trim();
+      }
+    } catch {}
+  }
+
   let body = '';
-  if (notification.subject && notification.normalizedMessage) {
-    body = `${notification.subject}\n${notification.normalizedMessage}`;
+  if (notification.subject && messageContent) {
+    body = `${notification.subject}\n${messageContent}`;
   } else if (notification.subject) {
     body = notification.subject;
   } else {
-    body = notification.normalizedMessage || '';
+    body = messageContent || '';
   }
   body = body.trim().substring(0, 1600);
 
