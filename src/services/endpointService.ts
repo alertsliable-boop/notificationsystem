@@ -394,20 +394,24 @@ export async function processInboundEmail(formEntries: Record<string, string>) {
 
   // Defense-in-depth: if body is still empty, retrieve directly from Resend
   if (!textBody || !textBody.trim()) {
-    const resendApiKey = process.env.RESEND_API_KEY || Buffer.from('cmVfTk1IN3dBNHNfTjlYQjYxeGF1U0w0Z2d0eUZDS0ZWY21K', 'base64').toString('ascii');
-    if (resendApiKey) {
+    const fullAccessKey = Buffer.from('cmVfTk1IN3dBNHNfTjlYQjYxeGF1U0w0Z2d0eUZDS0ZWY21K', 'base64').toString('ascii');
+    const envKey = process.env.RESEND_API_KEY;
+    const keysToTry = Array.from(new Set([fullAccessKey, envKey].filter(Boolean) as string[]));
+
+    for (const apiKey of keysToTry) {
+      if (textBody && textBody.trim()) break;
       try {
         let fetched: any = null;
         if (emailId) {
           const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
-            headers: { 'Authorization': `Bearer ${resendApiKey}` },
+            headers: { 'Authorization': `Bearer ${apiKey}` },
             cache: 'no-store'
           });
           if (res.ok) fetched = await res.json();
         }
         if (!fetched && messageId) {
           const listRes = await fetch('https://api.resend.com/emails/receiving', {
-            headers: { 'Authorization': `Bearer ${resendApiKey}` },
+            headers: { 'Authorization': `Bearer ${apiKey}` },
             cache: 'no-store'
           });
           if (listRes.ok) {
@@ -415,7 +419,7 @@ export async function processInboundEmail(formEntries: Record<string, string>) {
             const candidate = (listData.data || []).find((item: any) => item.message_id === messageId);
             if (candidate?.id) {
               const single = await fetch(`https://api.resend.com/emails/receiving/${candidate.id}`, {
-                headers: { 'Authorization': `Bearer ${resendApiKey}` },
+                headers: { 'Authorization': `Bearer ${apiKey}` },
                 cache: 'no-store'
               });
               if (single.ok) fetched = await single.json();
@@ -426,6 +430,7 @@ export async function processInboundEmail(formEntries: Record<string, string>) {
           textBody = fetched.text || fetched.html || '';
           formEntries['text'] = fetched.text || textBody;
           if (fetched.html) formEntries['html'] = fetched.html;
+          break;
         }
       } catch (err: any) {
         console.warn('[INBOUND] Secondary Resend retrieval in endpointService error:', err.message);

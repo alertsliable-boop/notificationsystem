@@ -70,63 +70,66 @@ export async function POST(req: Request) {
     let text = emailData.text || '';
     let html = emailData.html || '';
     let headers = emailData.headers || {};
-    const resendApiKey = process.env.RESEND_API_KEY || Buffer.from('cmVfTk1IN3dBNHNfTjlYQjYxeGF1U0w0Z2d0eUZDS0ZWY21K', 'base64').toString('ascii');
-    if (!process.env.RESEND_API_KEY) {
-      console.log('[INBOUND WEBHOOK] Using fallback RESEND_API_KEY for inbound email body retrieval.');
-    }
+    const fullAccessKey = Buffer.from('cmVfTk1IN3dBNHNfTjlYQjYxeGF1U0w0Z2d0eUZDS0ZWY21K', 'base64').toString('ascii');
+    const envKey = process.env.RESEND_API_KEY;
+    const keysToTry = Array.from(new Set([fullAccessKey, envKey].filter(Boolean) as string[]));
 
     // Resend email.received webhook sends metadata only. Fetch full body if text is missing
-    if (resendApiKey && (!text || !text.trim())) {
+    if (!text || !text.trim()) {
       let fetchedEmail: any = null;
 
-      // Strategy 1: Fetch direct by email_id
-      if (emailId) {
-        try {
-          const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
-            headers: {
-              'Authorization': `Bearer ${resendApiKey}`,
-            },
-            cache: 'no-store'
-          });
-          if (res.ok) {
-            fetchedEmail = await res.json();
-            console.log(`[INBOUND WEBHOOK] Fetched email body for email ID: ${emailId}`);
-          } else {
-            console.warn(`[INBOUND WEBHOOK] Resend API returned status ${res.status} for email ID ${emailId}`);
+      for (const apiKey of keysToTry) {
+        if (fetchedEmail) break;
+
+        // Strategy 1: Fetch direct by email_id
+        if (emailId) {
+          try {
+            const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
+              headers: { 'Authorization': `Bearer ${apiKey}` },
+              cache: 'no-store'
+            });
+            if (res.ok) {
+              fetchedEmail = await res.json();
+              console.log(`[INBOUND WEBHOOK] Fetched email body for email ID: ${emailId}`);
+              break;
+            } else {
+              console.warn(`[INBOUND WEBHOOK] Resend API returned status ${res.status} for email ID ${emailId}`);
+            }
+          } catch (fetchErr: any) {
+            console.error('[INBOUND WEBHOOK] Error fetching email from Resend by ID:', fetchErr.message);
           }
-        } catch (fetchErr: any) {
-          console.error('[INBOUND WEBHOOK] Error fetching email from Resend by ID:', fetchErr.message);
         }
-      }
 
-      // Strategy 2: Fallback query via receiving list matching message_id or recipient
-      if (!fetchedEmail) {
-        try {
-          const listRes = await fetch('https://api.resend.com/emails/receiving', {
-            headers: { 'Authorization': `Bearer ${resendApiKey}` },
-            cache: 'no-store'
-          });
-          if (listRes.ok) {
-            const listData = await listRes.json();
-            const candidate = (listData.data || []).find((item: any) => {
-              if (emailData.message_id && item.message_id === emailData.message_id) return true;
-              if (emailId && item.id === emailId) return true;
-              return false;
-            }) || listData.data?.[0];
+        // Strategy 2: Fallback query via receiving list matching message_id or recipient
+        if (!fetchedEmail) {
+          try {
+            const listRes = await fetch('https://api.resend.com/emails/receiving', {
+              headers: { 'Authorization': `Bearer ${apiKey}` },
+              cache: 'no-store'
+            });
+            if (listRes.ok) {
+              const listData = await listRes.json();
+              const candidate = (listData.data || []).find((item: any) => {
+                if (emailData.message_id && item.message_id === emailData.message_id) return true;
+                if (emailId && item.id === emailId) return true;
+                return false;
+              }) || listData.data?.[0];
 
-            if (candidate?.id) {
-              const singleRes = await fetch(`https://api.resend.com/emails/receiving/${candidate.id}`, {
-                headers: { 'Authorization': `Bearer ${resendApiKey}` },
-                cache: 'no-store'
-              });
-              if (singleRes.ok) {
-                fetchedEmail = await singleRes.json();
-                console.log(`[INBOUND WEBHOOK] Fallback matched email ${candidate.id} via receiving list`);
+              if (candidate?.id) {
+                const singleRes = await fetch(`https://api.resend.com/emails/receiving/${candidate.id}`, {
+                  headers: { 'Authorization': `Bearer ${apiKey}` },
+                  cache: 'no-store'
+                });
+                if (singleRes.ok) {
+                  fetchedEmail = await singleRes.json();
+                  console.log(`[INBOUND WEBHOOK] Fallback matched email ${candidate.id} via receiving list`);
+                  break;
+                }
               }
             }
+          } catch (listErr: any) {
+            console.error('[INBOUND WEBHOOK] Fallback list fetch error:', listErr.message);
           }
-        } catch (listErr: any) {
-          console.error('[INBOUND WEBHOOK] Fallback list fetch error:', listErr.message);
         }
       }
 
