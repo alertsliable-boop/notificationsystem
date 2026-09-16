@@ -13,6 +13,11 @@ function SmsStatusPill({ status }: { status: string }) {
       <CheckCircle2 className="w-3 h-3" /> Delivered
     </span>
   );
+  if (status === 'SENT') return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+      <CheckCircle2 className="w-3 h-3" /> Sent
+    </span>
+  );
   if (['FAILED', 'UNDELIVERED'].includes(status)) return (
     <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">
       <XCircle className="w-3 h-3" /> Failed
@@ -148,10 +153,28 @@ export default async function NotificationsPage({
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {notifications.map((notif: any) => {
-                    const allDelivered = notif.smsMessages.length > 0 && notif.smsMessages.every((m: any) => m.status === 'DELIVERED');
-                    const anyFailed = notif.smsMessages.some((m: any) => ['FAILED', 'UNDELIVERED'].includes(m.status));
-                    const overallStatus = anyFailed ? 'FAILED' : allDelivered ? 'DELIVERED' : 'PENDING';
-                    const dotColor = anyFailed ? 'bg-red-500' : allDelivered ? 'bg-green-500' : 'bg-blue-400 animate-pulse';
+                    const hasMessages = notif.smsMessages && notif.smsMessages.length > 0;
+                    const anyFailed = notif.smsMessages?.some((m: any) => ['FAILED', 'UNDELIVERED'].includes(m.status));
+                    const allDelivered = hasMessages && notif.smsMessages.every((m: any) => m.status === 'DELIVERED');
+                    const allSentOrDelivered = hasMessages && notif.smsMessages.every((m: any) => ['SENT', 'DELIVERED'].includes(m.status));
+                    const anySentOrDelivered = notif.smsMessages?.some((m: any) => ['SENT', 'DELIVERED'].includes(m.status));
+
+                    const overallStatus = anyFailed
+                      ? 'FAILED'
+                      : allDelivered
+                      ? 'DELIVERED'
+                      : (allSentOrDelivered || anySentOrDelivered)
+                      ? 'SENT'
+                      : 'PENDING';
+
+                    const dotColor = anyFailed
+                      ? 'bg-red-500'
+                      : allDelivered
+                      ? 'bg-green-500'
+                      : (allSentOrDelivered || anySentOrDelivered)
+                      ? 'bg-emerald-500'
+                      : 'bg-blue-400 animate-pulse';
+
                     const endpointAddress = `${notif.endpoint.localPart}@${notif.endpoint.domain?.hostname || 'mail.liablealerts.com'}`;
 
                     return (

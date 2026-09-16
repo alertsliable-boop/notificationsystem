@@ -80,6 +80,12 @@ export default function RecipientsPage() {
     setSaving(true);
     setError('');
 
+    if (!label.trim()) {
+      setError('Contact name is required.');
+      setSaving(false);
+      return;
+    }
+
     if (duplicateMatch && !editingId) {
       setError(`This phone number already exists for "${duplicateMatch.label || duplicateMatch.phoneE164}". Duplicate numbers cannot be added.`);
       setSaving(false);
@@ -327,12 +333,13 @@ export default function RecipientsPage() {
               </div>
               <div>
                 <label className="block text-[12px] font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                  Label / Name
+                  Contact Name *
                 </label>
                 <input
+                  required
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
-                  placeholder="Lina (On-Call)"
+                  placeholder="e.g. Lina (On-Call)"
                   className="w-full border border-gray-200 bg-gray-50 rounded-xl px-4 py-2.5 text-[14px] text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
                 />
               </div>

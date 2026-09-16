@@ -14,26 +14,49 @@ export async function GET() {
   if (isUnauthorizedResponse(ctx)) return ctx;
 
   const supabase = getAdminClient();
-  const { data: sites } = await supabase
-    .from('Site')
-    .select('*, customer:Customer(name), endpoints:InboundEndpoint(id, recipients:EndpointRecipient(recipientId))')
-    .eq('companyId', ctx.companyId)
-    .order('name', { ascending: true });
+  const [{ data: sites }, { data: endpoints }, { data: links }] = await Promise.all([
+    supabase
+      .from('Site')
+      .select('*, customer:Customer(name)')
+      .eq('companyId', ctx.companyId)
+      .order('name', { ascending: true }),
+    supabase
+      .from('InboundEndpoint')
+      .select('id, siteId')
+      .eq('companyId', ctx.companyId),
+    supabase
+      .from('EndpointRecipient')
+      .select('endpointId, recipientId'),
+  ]);
+
+  // Map endpointId to siteId and count endpoints per site
+  const endpointSiteMap = new Map<string, string>();
+  const siteEndpointsCount = new Map<string, number>();
+  (endpoints || []).forEach((ep: any) => {
+    if (ep.siteId) {
+      endpointSiteMap.set(ep.id, ep.siteId);
+      siteEndpointsCount.set(ep.siteId, (siteEndpointsCount.get(ep.siteId) || 0) + 1);
+    }
+  });
+
+  // Map siteId to set of unique recipientIds
+  const siteRecipientsMap = new Map<string, Set<string>>();
+  (links || []).forEach((link: any) => {
+    const siteId = endpointSiteMap.get(link.endpointId);
+    if (siteId && link.recipientId) {
+      if (!siteRecipientsMap.has(siteId)) {
+        siteRecipientsMap.set(siteId, new Set());
+      }
+      siteRecipientsMap.get(siteId)!.add(link.recipientId);
+    }
+  });
 
   const mappedSites = (sites || []).map((s: any) => {
-    const endpointsList = s.endpoints || [];
-    const recipientIds = new Set<string>();
-    endpointsList.forEach((ep: any) => {
-      (ep.recipients || []).forEach((r: any) => {
-        if (r.recipientId) recipientIds.add(r.recipientId);
-      });
-    });
-
     return {
       ...s,
       _count: {
-        endpoints: endpointsList.length,
-        recipients: recipientIds.size,
+        endpoints: siteEndpointsCount.get(s.id) || 0,
+        recipients: siteRecipientsMap.get(s.id)?.size || 0,
       },
     };
   });

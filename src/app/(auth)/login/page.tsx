@@ -64,7 +64,7 @@ function LoginForm() {
 
           <div className="space-y-4">
             {[
-              'Unlimited SMS recipients per endpoint',
+              'Up to 10 SMS recipients per endpoint',
               'Real-time delivery tracking',
               'Multi-site customer management',
               'Comprehensive audit logs'

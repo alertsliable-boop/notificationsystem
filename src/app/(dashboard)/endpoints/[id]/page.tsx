@@ -160,8 +160,16 @@ export default async function EndpointDetailPage({
                 {recentNotifications.map((notif: any) => {
                   const smsCount = notif.smsMessages?.length || 0;
                   const allDelivered = smsCount > 0 && notif.smsMessages.every((m: any) => m.status === 'DELIVERED');
+                  const allSentOrDelivered = smsCount > 0 && notif.smsMessages.every((m: any) => ['SENT', 'DELIVERED'].includes(m.status));
+                  const anySentOrDelivered = notif.smsMessages.some((m: any) => ['SENT', 'DELIVERED'].includes(m.status));
                   const anyFailed = notif.smsMessages.some((m: any) => ['FAILED', 'UNDELIVERED'].includes(m.status));
-                  const statusColor = anyFailed ? 'bg-red-500' : allDelivered ? 'bg-green-500' : 'bg-blue-500';
+                  const statusColor = anyFailed
+                    ? 'bg-red-500'
+                    : allDelivered
+                    ? 'bg-green-500'
+                    : (allSentOrDelivered || anySentOrDelivered)
+                    ? 'bg-emerald-500'
+                    : 'bg-blue-500 animate-pulse';
 
                   return (
                     <Link

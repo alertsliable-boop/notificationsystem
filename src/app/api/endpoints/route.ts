@@ -60,7 +60,13 @@ const createEndpointSchema = z.object({
   siteId: z.string().min(1, 'Site is required'),
   severityTag: z.string().optional(),
   notes: z.string().optional(),
-  recipients: z.array(z.string()).optional(),
+  recipients: z.array(z.union([
+    z.string(),
+    z.object({
+      phone: z.string(),
+      name: z.string().optional(),
+    })
+  ])).optional(),
 });
 
 export async function POST(req: Request) {

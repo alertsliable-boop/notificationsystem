@@ -71,7 +71,15 @@ export async function processSmsFanout(job: Job) {
     return;
   }
 
-  const body = `ALERT [${notification.endpoint.label || notification.endpoint.localPart}]: ${notification.subject ? notification.subject + ' - ' : ''}${notification.normalizedMessage}`;
+  let body = '';
+  if (notification.subject && notification.normalizedMessage) {
+    body = `${notification.subject}\n${notification.normalizedMessage}`;
+  } else if (notification.subject) {
+    body = notification.subject;
+  } else {
+    body = notification.normalizedMessage || '';
+  }
+  body = body.trim().substring(0, 1600);
 
   const sendPromises = activeRecipients.map(async (er: any) => {
     const phoneRecipient = er.recipient;

@@ -34,8 +34,15 @@ async function processSmsJob(job: Job) {
     return;
   }
 
-  const endpointLabel = notification.endpoint.label || notification.endpoint.localPart;
-  const smsBody = `🚨 ALERT — ${endpointLabel}\n${notification.subject ? `Subject: ${notification.subject}\n` : ''}${notification.normalizedMessage}`.substring(0, 1600);
+  let smsBody = '';
+  if (notification.subject && notification.normalizedMessage) {
+    smsBody = `${notification.subject}\n${notification.normalizedMessage}`;
+  } else if (notification.subject) {
+    smsBody = notification.subject;
+  } else {
+    smsBody = notification.normalizedMessage || '';
+  }
+  smsBody = smsBody.trim().substring(0, 1600);
 
   const activeRecipients = notification.endpoint.recipients.filter((er: any) => !er.recipient.optedOut);
 

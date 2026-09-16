@@ -87,12 +87,16 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
 
   const handleAddRecipientSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (recipientTab === 'new' && !newLabel.trim()) {
+      alert('Contact name is required to add a recipient.');
+      return;
+    }
     setAddingRecipient(true);
 
     try {
       const body = recipientTab === 'saved'
         ? { recipientId: selectedRecipientId }
-        : { phoneE164: newPhone.trim(), label: newLabel.trim() || undefined };
+        : { phoneE164: newPhone.trim(), label: newLabel.trim() };
 
       const res = await fetch(`/api/endpoints/${endpointId}/recipients`, {
         method: 'POST',
@@ -256,18 +260,19 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <input
                   type="text"
-                  placeholder="Phone (e.g. 305-753-7770 or +13057537770) *"
+                  placeholder="Contact Name * (e.g. Lina)"
+                  required
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  className="w-full border border-purple-200 bg-white rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Mobile Phone * (e.g. 305-753-7770)"
                   required
                   value={newPhone}
                   onChange={(e) => setNewPhone(e.target.value)}
                   className="w-full border border-purple-200 bg-white rounded-xl px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-purple-500"
-                />
-                <input
-                  type="text"
-                  placeholder="Label / Contact Name (Optional)"
-                  value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
-                  className="w-full border border-purple-200 bg-white rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
             )}

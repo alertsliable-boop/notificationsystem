@@ -16,27 +16,62 @@ export async function GET() {
   if (isUnauthorizedResponse(ctx)) return ctx;
 
   const supabase = getAdminClient();
-  const { data: customers } = await supabase
-    .from('Customer')
-    .select('*, sites:Site(id), endpoints:InboundEndpoint(id, recipients:EndpointRecipient(recipientId))')
-    .eq('companyId', ctx.companyId)
-    .order('name', { ascending: true });
+  const [{ data: customers }, { data: sites }, { data: endpoints }, { data: links }] = await Promise.all([
+    supabase
+      .from('Customer')
+      .select('*')
+      .eq('companyId', ctx.companyId)
+      .order('name', { ascending: true }),
+    supabase
+      .from('Site')
+      .select('id, customerId')
+      .eq('companyId', ctx.companyId),
+    supabase
+      .from('InboundEndpoint')
+      .select('id, customerId')
+      .eq('companyId', ctx.companyId),
+    supabase
+      .from('EndpointRecipient')
+      .select('endpointId, recipientId'),
+  ]);
+
+  // Count sites per customer
+  const customerSitesCount = new Map<string, number>();
+  (sites || []).forEach((s: any) => {
+    if (s.customerId) {
+      customerSitesCount.set(s.customerId, (customerSitesCount.get(s.customerId) || 0) + 1);
+    }
+  });
+
+  // Map endpointId to customerId and count endpoints per customer
+  const endpointCustomerMap = new Map<string, string>();
+  const customerEndpointsCount = new Map<string, number>();
+  (endpoints || []).forEach((ep: any) => {
+    if (ep.customerId) {
+      endpointCustomerMap.set(ep.id, ep.customerId);
+      customerEndpointsCount.set(ep.customerId, (customerEndpointsCount.get(ep.customerId) || 0) + 1);
+    }
+  });
+
+  // Map customerId to set of unique recipientIds
+  const customerRecipientsMap = new Map<string, Set<string>>();
+  (links || []).forEach((link: any) => {
+    const customerId = endpointCustomerMap.get(link.endpointId);
+    if (customerId && link.recipientId) {
+      if (!customerRecipientsMap.has(customerId)) {
+        customerRecipientsMap.set(customerId, new Set());
+      }
+      customerRecipientsMap.get(customerId)!.add(link.recipientId);
+    }
+  });
 
   const mappedCustomers = (customers || []).map((c: any) => {
-    const endpointsList = c.endpoints || [];
-    const recipientIds = new Set<string>();
-    endpointsList.forEach((ep: any) => {
-      (ep.recipients || []).forEach((r: any) => {
-        if (r.recipientId) recipientIds.add(r.recipientId);
-      });
-    });
-
     return {
       ...c,
       _count: {
-        sites: c.sites?.length || 0,
-        endpoints: endpointsList.length,
-        recipients: recipientIds.size,
+        sites: customerSitesCount.get(c.id) || 0,
+        endpoints: customerEndpointsCount.get(c.id) || 0,
+        recipients: customerRecipientsMap.get(c.id)?.size || 0,
       },
     };
   });

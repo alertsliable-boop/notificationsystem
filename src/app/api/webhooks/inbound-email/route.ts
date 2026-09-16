@@ -66,31 +66,107 @@ export async function POST(req: Request) {
 
     // Safely extract the 'to' address (Resend provides an array for 'to')
     const toAddress = Array.isArray(emailData.to) ? emailData.to[0] : (emailData.to || '');
-    const emailId = emailData.email_id || emailData.id;
+    const emailId = emailData.email_id || emailData.id || payload.email_id || payload.id || payload.data?.email_id || payload.data?.id;
     let text = emailData.text || '';
     let html = emailData.html || '';
     let headers = emailData.headers || {};
 
-    // Resend email.received webhook sends metadata only. Fetch full body if email_id is present and text is missing
-    if (emailId && !text && !html) {
-      const resendApiKey = process.env.RESEND_API_KEY;
-      if (resendApiKey) {
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      console.error('[INBOUND WEBHOOK] WARNING: RESEND_API_KEY is not defined in environment variables! Inbound email body cannot be retrieved.');
+    }
+
+    // Resend email.received webhook sends metadata only. Fetch full body if text is missing
+    if (resendApiKey && (!text || !text.trim())) {
+      let fetchedEmail: any = null;
+
+      // Strategy 1: Fetch direct by email_id
+      if (emailId) {
         try {
           const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
             headers: {
-              'Authorization': `Bearer ${resendApiKey}`
-            }
+              'Authorization': `Bearer ${resendApiKey}`,
+            },
+            cache: 'no-store'
           });
           if (res.ok) {
-            const fullEmail = await res.json();
-            text = fullEmail.text || '';
-            html = fullEmail.html || '';
-            headers = fullEmail.headers || headers;
+            fetchedEmail = await res.json();
+            console.log(`[INBOUND WEBHOOK] Fetched email body for email ID: ${emailId}`);
           } else {
-            console.warn(`[INBOUND WEBHOOK] Resend API returned ${res.status} when fetching email ${emailId}`);
+            console.warn(`[INBOUND WEBHOOK] Resend API returned status ${res.status} for email ID ${emailId}`);
           }
-        } catch (fetchErr) {
-          console.error('[INBOUND WEBHOOK] Error fetching full email from Resend:', fetchErr);
+        } catch (fetchErr: any) {
+          console.error('[INBOUND WEBHOOK] Error fetching email from Resend by ID:', fetchErr.message);
+        }
+      }
+
+      // Strategy 2: Fallback query via receiving list matching message_id or recipient
+      if (!fetchedEmail) {
+        try {
+          const listRes = await fetch('https://api.resend.com/emails/receiving', {
+            headers: { 'Authorization': `Bearer ${resendApiKey}` },
+            cache: 'no-store'
+          });
+          if (listRes.ok) {
+            const listData = await listRes.json();
+            const candidate = (listData.data || []).find((item: any) => {
+              if (emailData.message_id && item.message_id === emailData.message_id) return true;
+              if (emailId && item.id === emailId) return true;
+              return false;
+            }) || listData.data?.[0];
+
+            if (candidate?.id) {
+              const singleRes = await fetch(`https://api.resend.com/emails/receiving/${candidate.id}`, {
+                headers: { 'Authorization': `Bearer ${resendApiKey}` },
+                cache: 'no-store'
+              });
+              if (singleRes.ok) {
+                fetchedEmail = await singleRes.json();
+                console.log(`[INBOUND WEBHOOK] Fallback matched email ${candidate.id} via receiving list`);
+              }
+            }
+          }
+        } catch (listErr: any) {
+          console.error('[INBOUND WEBHOOK] Fallback list fetch error:', listErr.message);
+        }
+      }
+
+      // Extract content from fetched email
+      if (fetchedEmail) {
+        text = fetchedEmail.text || '';
+        html = fetchedEmail.html || '';
+        headers = fetchedEmail.headers || headers;
+
+        // If text is empty but HTML is available, strip HTML tags to extract plaintext
+        if ((!text || !text.trim()) && html) {
+          text = html
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+            .replace(/<br\s*[\/]?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n\n')
+            .replace(/<\/div>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .trim();
+        }
+
+        // If text is still empty but raw download_url is available
+        if ((!text || !text.trim()) && fetchedEmail.raw?.download_url) {
+          try {
+            const rawRes = await fetch(fetchedEmail.raw.download_url);
+            if (rawRes.ok) {
+              const rawEml = await rawRes.text();
+              const parts = rawEml.split(/\r?\n\r?\n/);
+              if (parts.length > 1) {
+                text = parts.slice(1).join('\n\n').trim();
+              }
+            }
+          } catch (rawErr: any) {
+            console.error('[INBOUND WEBHOOK] Raw EML download failed:', rawErr.message);
+          }
         }
       }
     }

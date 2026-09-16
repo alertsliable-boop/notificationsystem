@@ -20,10 +20,12 @@ export default function CreateEndpointPage() {
   const [customerId, setCustomerId] = useState('');
   const [siteId, setSiteId] = useState('');
   
-  // Selected recipients: can be saved recipient IDs or phone strings
+  // Selected recipients: can be saved recipient IDs or custom recipient objects
   const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
-  const [customPhoneNumbers, setCustomPhoneNumbers] = useState<string[]>([]);
+  const [customRecipients, setCustomRecipients] = useState<Array<{ phone: string; name: string }>>([]);
   const [newPhoneInput, setNewPhoneInput] = useState('');
+  const [newNameInput, setNewNameInput] = useState('');
+  const [recipientError, setRecipientError] = useState('');
   const [savedRecipients, setSavedRecipients] = useState<SavedRecipient[]>([]);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -148,20 +150,29 @@ export default function CreateEndpointPage() {
     }
   };
 
-  const handleAddNewCustomPhone = () => {
-    const norm = normalizePhoneE164(newPhoneInput);
-    if (!norm || norm.length < 8) {
-      alert('Please enter a valid phone number');
+  const handleAddNewCustomRecipient = () => {
+    setRecipientError('');
+    const trimmedName = newNameInput.trim();
+    if (!trimmedName) {
+      setRecipientError('Contact name is required to add a recipient.');
       return;
     }
-    if (!customPhoneNumbers.includes(norm)) {
-      setCustomPhoneNumbers([...customPhoneNumbers, norm]);
+    const norm = normalizePhoneE164(newPhoneInput);
+    if (!norm || norm.length < 8) {
+      setRecipientError('Please enter a valid mobile phone number.');
+      return;
     }
+    if (customRecipients.some(r => r.phone === norm)) {
+      setRecipientError('This phone number has already been added to the list.');
+      return;
+    }
+    setCustomRecipients([...customRecipients, { phone: norm, name: trimmedName }]);
     setNewPhoneInput('');
+    setNewNameInput('');
   };
 
-  const handleRemoveCustomPhone = (index: number) => {
-    setCustomPhoneNumbers(customPhoneNumbers.filter((_, idx) => idx !== index));
+  const handleRemoveCustomRecipient = (index: number) => {
+    setCustomRecipients(customRecipients.filter((_, idx) => idx !== index));
   };
 
   const handleHandleChange = (val: string) => {
@@ -186,17 +197,27 @@ export default function CreateEndpointPage() {
       return;
     }
 
-    // Combine selected saved recipient IDs and custom normalized phone numbers
-    const allRecipients = [
+    // Combine selected saved recipient IDs and custom recipients with names
+    const allRecipients: Array<string | { phone: string; name: string }> = [
       ...selectedRecipientIds,
-      ...customPhoneNumbers,
+      ...customRecipients,
     ];
 
-    // If user typed a number in the box but didn't click Add, include it
-    if (newPhoneInput.trim()) {
+    // If user typed into the input boxes without clicking "Add", validate both before adding
+    if (newPhoneInput.trim() || newNameInput.trim()) {
+      if (!newNameInput.trim()) {
+        setError('Please enter a contact name for the pending recipient or clear the input.');
+        setIsLoading(false);
+        return;
+      }
       const norm = normalizePhoneE164(newPhoneInput.trim());
-      if (norm && !allRecipients.includes(norm)) {
-        allRecipients.push(norm);
+      if (!norm || norm.length < 8) {
+        setError('Please enter a valid phone number for the pending recipient or clear the input.');
+        setIsLoading(false);
+        return;
+      }
+      if (!allRecipients.some((r: any) => (typeof r === 'string' ? false : r.phone === norm))) {
+        allRecipients.push({ phone: norm, name: newNameInput.trim() });
       }
     }
 
@@ -471,46 +492,82 @@ export default function CreateEndpointPage() {
               </div>
             )}
 
-            {/* Custom Phone Numbers List */}
-            {customPhoneNumbers.length > 0 && (
+            {/* Custom Recipients Added List */}
+            {customRecipients.length > 0 && (
               <div className="space-y-2 pt-2">
                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Additional Numbers Added:
+                  New Recipients Added:
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  {customPhoneNumbers.map((num, i) => (
-                    <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-800 text-xs font-mono font-medium border border-gray-200">
-                      {formatPhoneDisplay(num)}
-                      <button type="button" onClick={() => handleRemoveCustomPhone(i)} className="text-gray-400 hover:text-red-500">
-                        <Trash2 className="w-3 h-3" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {customRecipients.map((rec, i) => (
+                    <div key={i} className="p-3 rounded-xl border border-blue-200 bg-blue-50/60 flex items-center justify-between">
+                      <div className="min-w-0 pr-2">
+                        <p className="text-xs font-bold text-gray-900 truncate">{rec.name}</p>
+                        <p className="text-[11px] font-mono text-gray-600">{formatPhoneDisplay(rec.phone)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCustomRecipient(i)}
+                        className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
+                        title="Remove recipient"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
-                    </span>
+                    </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Input to Add New Number */}
-            <div className="pt-2">
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                Add Another Phone Number:
+            {/* Input to Add New Recipient */}
+            <div className="pt-2 space-y-2">
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                Add Another Recipient:
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="tel"
-                  value={newPhoneInput}
-                  onChange={(e) => setNewPhoneInput(e.target.value)}
-                  placeholder="305-753-7770 or +13057537770"
-                  className="flex-1 border border-gray-300 bg-white rounded-xl px-4 py-2 text-sm text-gray-900 font-mono outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddNewCustomPhone}
-                  className="px-4 py-2 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl transition"
-                >
-                  Add Number
-                </button>
+
+              {recipientError && (
+                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-medium flex items-center justify-between">
+                  <span>{recipientError}</span>
+                  <button type="button" onClick={() => setRecipientError('')} className="text-red-500 hover:text-red-700 font-bold ml-2">✕</button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <input
+                    type="text"
+                    value={newNameInput}
+                    onChange={(e) => {
+                      setNewNameInput(e.target.value);
+                      if (recipientError) setRecipientError('');
+                    }}
+                    placeholder="Contact Name * (e.g. Lina)"
+                    className="w-full border border-gray-300 bg-white rounded-xl px-4 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="tel"
+                    value={newPhoneInput}
+                    onChange={(e) => {
+                      setNewPhoneInput(e.target.value);
+                      if (recipientError) setRecipientError('');
+                    }}
+                    placeholder="Mobile Phone * (e.g. 305-753-7770)"
+                    className="flex-1 border border-gray-300 bg-white rounded-xl px-4 py-2 text-sm text-gray-900 font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddNewCustomRecipient}
+                    className="px-4 py-2 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl transition whitespace-nowrap flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Recipient
+                  </button>
+                </div>
               </div>
+              <p className="text-[11px] text-gray-500">
+                Both contact name and a valid mobile phone number are required to add a recipient.
+              </p>
             </div>
 
             {/* Compliance callout */}

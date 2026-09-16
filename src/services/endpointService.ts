@@ -125,7 +125,7 @@ export async function createEndpoint({
   domainName?: string;
   customerId: string;
   siteId: string;
-  recipients: string[];
+  recipients: Array<string | { phone: string; name?: string }>;
   notes?: string;
   severityTag?: string;
 }) {
@@ -209,8 +209,10 @@ export async function createEndpoint({
   if (recipients && recipients.length > 0) {
     const { normalizePhoneE164 } = await import('@/lib/phone');
     for (const item of recipients) {
-      if (!item || !item.trim()) continue;
-      const raw = item.trim();
+      if (!item) continue;
+      const raw = typeof item === 'string' ? item.trim() : (item.phone || '').trim();
+      const contactName = typeof item === 'object' && item.name ? item.name.trim() : null;
+      if (!raw) continue;
       let rec: any = null;
 
       // 1. Check if item is already a recipient ID
@@ -236,12 +238,16 @@ export async function createEndpoint({
         if (!recByPhone) {
           const { data: newRec } = await supabase
             .from('PhoneRecipient')
-            .insert({ companyId, phoneE164: normalized, label: normalized })
+            .insert({ companyId, phoneE164: normalized, label: contactName || normalized })
             .select()
             .single();
           rec = newRec;
         } else {
           rec = recByPhone;
+          if (contactName && (!rec.label || rec.label === rec.phoneE164)) {
+            await supabase.from('PhoneRecipient').update({ label: contactName }).eq('id', rec.id);
+            rec.label = contactName;
+          }
         }
       }
 
@@ -383,8 +389,13 @@ export async function processInboundEmail(formEntries: Record<string, string>) {
     }
   }
 
-  const stripped = textBody.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-  const normalizedMessage = stripped.length > 280 ? stripped.substring(0, 277) + '...' : stripped;
+  const stripped = textBody
+    .replace(/<[^>]+>/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  const normalizedMessage = stripped.length > 500 ? stripped.substring(0, 497) + '...' : stripped;
 
   const { data: notification } = await supabase
     .from('Notification')

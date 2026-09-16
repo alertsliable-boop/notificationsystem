@@ -239,14 +239,19 @@ export default async function DashboardPage() {
           ) : (
             <div className="divide-y divide-gray-50">
               {recentNotifications.map((notif: any) => {
-                const allDelivered = notif.smsMessages.length > 0 && notif.smsMessages.every((m: any) => m.status === 'DELIVERED');
-                const anyFailed = notif.smsMessages.some((m: any) => ['FAILED', 'UNDELIVERED'].includes(m.status));
-                const isPending = notif.smsMessages.some((m: any) => ['QUEUED', 'SENDING'].includes(m.status));
+                const hasMessages = notif.smsMessages && notif.smsMessages.length > 0;
+                const anyFailed = notif.smsMessages?.some((m: any) => ['FAILED', 'UNDELIVERED'].includes(m.status));
+                const allDelivered = hasMessages && notif.smsMessages.every((m: any) => m.status === 'DELIVERED');
+                const allSentOrDelivered = hasMessages && notif.smsMessages.every((m: any) => ['SENT', 'DELIVERED'].includes(m.status));
+                const anySentOrDelivered = notif.smsMessages?.some((m: any) => ['SENT', 'DELIVERED'].includes(m.status));
+                const isPending = notif.smsMessages?.some((m: any) => ['QUEUED', 'SENDING'].includes(m.status));
 
                 const statusDot = anyFailed
                   ? 'bg-red-500'
                   : allDelivered
                   ? 'bg-green-500'
+                  : (allSentOrDelivered || anySentOrDelivered)
+                  ? 'bg-emerald-500'
                   : isPending
                   ? 'bg-blue-500 animate-pulse'
                   : 'bg-gray-300';
@@ -255,6 +260,8 @@ export default async function DashboardPage() {
                   ? 'Failed'
                   : allDelivered
                   ? 'Delivered'
+                  : (allSentOrDelivered || anySentOrDelivered)
+                  ? 'Sent'
                   : isPending
                   ? 'Sending…'
                   : 'Pending';
@@ -263,6 +270,8 @@ export default async function DashboardPage() {
                   ? 'text-red-600 bg-red-50'
                   : allDelivered
                   ? 'text-green-700 bg-green-50'
+                  : (allSentOrDelivered || anySentOrDelivered)
+                  ? 'text-emerald-700 bg-emerald-50'
                   : isPending
                   ? 'text-blue-600 bg-blue-50'
                   : 'text-gray-500 bg-gray-50';
