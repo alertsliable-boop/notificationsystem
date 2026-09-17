@@ -84,6 +84,7 @@ export async function POST(req: Request) {
       customer: subscription?.stripeCustomerId || undefined,
       customer_email: !subscription?.stripeCustomerId ? (user?.email || undefined) : undefined,
       line_items,
+      ...( { managed_payments: { enabled: false } } as any ),
       client_reference_id: ctx.companyId,
       metadata: {
         companyId: ctx.companyId,

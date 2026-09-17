@@ -197,7 +197,8 @@ export async function POST(req: Request) {
       break;
     }
 
-    case 'invoice.paid': {
+    case 'invoice.paid':
+    case 'invoice.payment_succeeded': {
       const invoice = event.data.object as any;
       const stripeSubId = invoice.subscription;
       if (stripeSubId && invoice.amount_paid > 0) {
@@ -208,6 +209,23 @@ export async function POST(req: Request) {
           .single();
 
         if (sub?.companyId) {
+          const periodStart = invoice.lines?.data?.[0]?.period?.start
+            ? new Date(invoice.lines.data[0].period.start * 1000).toISOString()
+            : new Date().toISOString();
+          const periodEnd = invoice.lines?.data?.[0]?.period?.end
+            ? new Date(invoice.lines.data[0].period.end * 1000).toISOString()
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+          // Ensure subscription remains active and period is updated
+          await supabase
+            .from('CompanySubscription')
+            .update({
+              status: 'ACTIVE',
+              currentPeriodStart: periodStart,
+              currentPeriodEnd: periodEnd,
+            })
+            .eq('stripeSubscriptionId', stripeSubId);
+
           // Verify if invoice already recorded
           const { data: existingInv } = await supabase
             .from('BillingInvoice')

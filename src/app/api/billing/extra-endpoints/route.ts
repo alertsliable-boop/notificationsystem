@@ -4,7 +4,7 @@ import { getAdminClient } from '@/lib/supabase';
 import { stripe, isStripeConfigured } from '@/lib/stripe';
 import { nanoid } from 'nanoid';
 
-// POST /api/billing/extra-endpoints — Purchase or adjust single endpoints ($12/mo each)
+// POST /api/billing/extra-endpoints — Purchase or adjust single endpoints ($15/mo each)
 export async function POST(req: Request) {
   const ctx = await requireAuth();
   if (isUnauthorizedResponse(ctx)) return ctx;
@@ -150,8 +150,8 @@ export async function POST(req: Request) {
         });
     }
 
-    const baseMax = sub.plan?.maxActiveEndpoints || 1;
-    const totalMax = baseMax + newExtra;
+    const baseSites = Math.max(1, sub.activeSites || 1);
+    const totalMax = baseSites + newExtra;
 
     await auditLog(ctx, 'PURCHASE_EXTRA_ENDPOINTS', 'CompanySubscription', sub.id, {
       previousExtra: currentExtra,
@@ -162,7 +162,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       extraEndpoints: newExtra,
-      baseEndpoints: baseMax,
+      baseEndpoints: baseSites,
       totalMaxEndpoints: totalMax,
       message: addedQty > 0
         ? `Successfully purchased ${addedQty} additional email endpoint${addedQty > 1 ? 's' : ''} for $${(addedQty * 15).toFixed(2)}/mo!`

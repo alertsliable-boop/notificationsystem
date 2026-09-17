@@ -248,7 +248,7 @@ export async function POST(req: Request) {
 
     if (extraEndpoints > 0) {
       line_items.push({
-        price: 'price_1UDETs33lejKAXgD3TMm7qgK',
+        price: process.env.STRIPE_EXTRA_ENDPOINT_PRICE_ID || 'price_1UGi0d33lejKAXgDsWnNcIH4',
         quantity: extraEndpoints,
       });
     }
@@ -267,6 +267,7 @@ export async function POST(req: Request) {
       customer: currentSub?.stripeCustomerId || undefined,
       customer_email: !currentSub?.stripeCustomerId ? customerEmail : undefined,
       line_items,
+      ...( { managed_payments: { enabled: false } } as any ),
       client_reference_id: ctx.companyId,
       metadata: {
         companyId: ctx.companyId,

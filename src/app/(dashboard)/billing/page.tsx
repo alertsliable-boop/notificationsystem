@@ -105,6 +105,14 @@ export default async function BillingPage({
             .single();
 
           if (!existingInvoice?.id) {
+            let pdfUrl: string | null = null;
+            if (checkoutSession.invoice) {
+              try {
+                const inv = await stripe.invoices.retrieve(checkoutSession.invoice as string);
+                pdfUrl = inv.invoice_pdf || null;
+              } catch (invErr) {}
+            }
+
             const totalAmount = checkoutSession.amount_total || (plan.priceCents * activeSites + extraEndpoints * 1500);
             await supabase.from('BillingInvoice').insert({
               id: nanoid(),
@@ -117,7 +125,7 @@ export default async function BillingPage({
               description: `Subscription: ${activeSites} Active Site(s) (${plan.name})${extraEndpoints > 0 ? ` + ${extraEndpoints} Additional Endpoint(s)` : ''}`,
               cardBrand: cardDetails.cardBrand || 'Card',
               cardLast4: cardDetails.cardLast4 || '••••',
-              pdfUrl: null,
+              pdfUrl,
               createdAt: new Date().toISOString(),
             });
           }

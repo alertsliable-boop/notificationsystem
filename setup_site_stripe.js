@@ -16,6 +16,7 @@ async function setup() {
   const siteProduct = await stripe.products.create({
     name: 'Liable Alerts - Active Site Subscription',
     description: 'Volume-tiered subscription per active site. 1-9: $49/site, 10-24: $44/site, 25-49: $39/site, 50+: $34/site.',
+    tax_code: 'txcd_10103000',
   });
 
   console.log('Creating volume-tiered price for Site Subscription...');
@@ -39,6 +40,7 @@ async function setup() {
   const addOnProduct = await stripe.products.create({
     name: 'Liable Alerts - Additional Endpoint',
     description: 'One additional dedicated alarm email endpoint at the same physical site ($15/mo, includes 250 SMS credits).',
+    tax_code: 'txcd_10103000',
   });
   const addOnPrice = await stripe.prices.create({
     product: addOnProduct.id,
@@ -53,6 +55,7 @@ async function setup() {
   const overageProduct = await stripe.products.create({
     name: 'Liable Alerts - SMS Overage Block',
     description: 'Additional 250 SMS delivery credits for high-volume alarm delivery ($10/block).',
+    tax_code: 'txcd_10103000',
   });
   const overagePrice = await stripe.prices.create({
     product: overageProduct.id,
