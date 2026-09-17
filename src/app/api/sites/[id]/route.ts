@@ -86,7 +86,43 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       
     if (error) throw error;
 
-    await auditLog(ctx, 'DELETE_SITE', 'Site', id, { name: existing.name });
+    // Update activeSites count
+    const { count: remainingSites } = await supabase
+      .from('Site')
+      .select('*', { count: 'exact', head: true })
+      .eq('companyId', ctx.companyId);
+
+    const updatedSiteCount = Math.max(1, remainingSites || 1);
+    await supabase
+      .from('CompanySubscription')
+      .update({ activeSites: updatedSiteCount })
+      .eq('companyId', ctx.companyId);
+
+    // Sync with Stripe if active subscription exists
+    const { stripe, isStripeConfigured } = await import('@/lib/stripe');
+    const { data: sub } = await supabase
+      .from('CompanySubscription')
+      .select('*')
+      .eq('companyId', ctx.companyId)
+      .single();
+
+    if (sub?.stripeSubscriptionId && !sub.stripeSubscriptionId.startsWith('mock_') && isStripeConfigured()) {
+      try {
+        const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
+        const sitePriceId = process.env.NEXT_PUBLIC_STRIPE_SITE_PRICE_ID || 'price_1UGi0d33lejKAXgDiGPnXQXW';
+        const siteItem = stripeSub.items.data.find((it: any) => it.price.id === sitePriceId);
+        if (siteItem) {
+          await stripe.subscriptionItems.update(siteItem.id, {
+            quantity: updatedSiteCount,
+            proration_behavior: 'always_invoice',
+          });
+        }
+      } catch (stripeErr: any) {
+        console.warn('Could not sync Stripe quantity on site deletion:', stripeErr.message);
+      }
+    }
+
+    await auditLog(ctx, 'DELETE_SITE', 'Site', id, { name: existing.name, remainingSites: updatedSiteCount });
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err: any) {

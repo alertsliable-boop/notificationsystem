@@ -28,6 +28,11 @@ export default function CreateEndpointPage() {
   const [recipientError, setRecipientError] = useState('');
   const [savedRecipients, setSavedRecipients] = useState<SavedRecipient[]>([]);
 
+  // SMS Usage Policy
+  const [smsUsageOption, setSmsUsageOption] = useState<'AUTO_OVERAGE' | 'STOP_AT_LIMIT'>('AUTO_OVERAGE');
+  const [overageLimitDollars, setOverageLimitDollars] = useState('');
+  const [existingEndpoints, setExistingEndpoints] = useState<any[]>([]);
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -130,6 +135,7 @@ export default function CreateEndpointPage() {
       setCustomers(cJson.data || []);
       setSites(sJson.data || []);
       setSavedRecipients(recJson.data || []);
+      setExistingEndpoints(eJson.data || []);
       
       const activeCount = uJson.data?.activeEndpoints ?? (eJson.data || []).filter((e: any) => e.status === 'ACTIVE').length;
       const maxAllowed = uJson.data?.maxEndpoints ?? 1;
@@ -238,7 +244,9 @@ export default function CreateEndpointPage() {
         severityTag: severityTag || undefined, 
         customerId, 
         siteId,
-        recipients: allRecipients 
+        recipients: allRecipients,
+        smsUsageOption,
+        monthlyOverageLimitCents: overageLimitDollars.trim() !== '' ? Math.round(parseFloat(overageLimitDollars) * 100) : null,
       }),
     });
 
@@ -247,7 +255,7 @@ export default function CreateEndpointPage() {
     if (!res.ok) {
       if (data.code === 'PLAN_LIMIT_EXCEEDED') {
         setIsAtLimit(true);
-        setError('Subscription plan active email account limit reached. Please add additional endpoints in Billing ($12/mo each) or upgrade your plan.');
+        setError('Subscription plan active email account limit reached. Please add additional endpoints in Billing ($15/mo each) or add more sites.');
       } else {
         setError(data.error || 'Failed to create inbound email account.');
       }
@@ -264,6 +272,9 @@ export default function CreateEndpointPage() {
     : 'your-endpoint');
 
   const previewAddress = `${displayedHandle}@${domain}`;
+
+  const siteEndpointsCount = existingEndpoints.filter((e) => e.siteId === siteId && e.status === 'ACTIVE').length;
+  const isAdditionalEndpoint = siteEndpointsCount > 0;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fadeIn py-6">
@@ -298,7 +309,7 @@ export default function CreateEndpointPage() {
           <div>
             <h4 className="font-bold text-amber-900 text-sm">Plan Limit Reached</h4>
             <p className="text-amber-700 text-xs mt-1">
-              You are using <strong>{usageInfo?.active} of {usageInfo?.max}</strong> active endpoints. You can add single endpoints for <strong>$12/month</strong> or upgrade your plan in Billing.
+              You are using <strong>{usageInfo?.active} of {usageInfo?.max}</strong> active endpoints. You can add additional endpoints for <strong>$15/month</strong> or expand your active sites in Billing.
             </p>
             <Link href="/billing" className="inline-flex items-center gap-1.5 mt-2.5 text-xs font-bold text-amber-900 bg-amber-200 hover:bg-amber-300 px-3 py-1.5 rounded-lg transition-colors">
               Add Endpoints in Billing →
@@ -421,6 +432,27 @@ export default function CreateEndpointPage() {
                 </select>
               </div>
             </div>
+
+            {siteId && (
+              <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+                isAdditionalEndpoint
+                  ? 'bg-purple-50 border-purple-200 text-purple-900'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              }`}>
+                <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  {isAdditionalEndpoint ? (
+                    <>
+                      <strong>Additional Endpoint ($15/month):</strong> This site already has {siteEndpointsCount} active endpoint{siteEndpointsCount > 1 ? 's' : ''}. Creating this endpoint will configure an additional dedicated endpoint for this site with <strong>250 SMS delivery credits/month</strong> and up to <strong>10 recipients</strong>.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Primary Site Endpoint:</strong> This is the initial endpoint for this site and is included with your site subscription (includes <strong>250 SMS delivery credits/month</strong> and up to <strong>10 recipients</strong>).
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -578,6 +610,93 @@ export default function CreateEndpointPage() {
                 {' '}and{' '}
                 <Link href="/privacy" target="_blank" className="text-blue-700 underline font-semibold">Privacy Policy</Link>.
               </p>
+            </div>
+
+            {/* Section 3: SMS Delivery & Usage Policy */}
+            <div className="space-y-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-xs uppercase tracking-wider text-gray-400">3 · SMS Delivery & Usage Policy</h3>
+                <span className="text-xs text-blue-600 font-semibold">250 credits included / mo</span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                {/* Option 2: Auto Overage */}
+                <label
+                  onClick={() => setSmsUsageOption('AUTO_OVERAGE')}
+                  className={`block p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    smsUsageOption === 'AUTO_OVERAGE'
+                      ? 'border-blue-600 bg-blue-50/40 shadow-xs'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="radio"
+                        name="newEndpointSmsOption"
+                        checked={smsUsageOption === 'AUTO_OVERAGE'}
+                        onChange={() => setSmsUsageOption('AUTO_OVERAGE')}
+                        className="text-blue-600 focus:ring-blue-500 mt-0.5"
+                      />
+                      <div>
+                        <span className="font-bold text-sm text-gray-900">Option 2: Automatic Overage Billing</span>
+                        <span className="ml-2 inline-block px-2 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-full uppercase tracking-wider">
+                          Recommended
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-2 pl-6 leading-relaxed">
+                    SMS notifications continue uninterrupted after the 250 included credits. Each additional block of <strong>250 SMS credits is $10</strong>. Recommended so critical alarm notifications do not stop.
+                  </p>
+                  {smsUsageOption === 'AUTO_OVERAGE' && (
+                    <div className="mt-3 pl-6 pt-3 border-t border-blue-100">
+                      <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                        Monthly Spend Cap (Optional)
+                      </label>
+                      <div className="flex items-center gap-2 max-w-xs">
+                        <span className="text-sm font-semibold text-gray-500">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="10"
+                          value={overageLimitDollars}
+                          onChange={(e) => setOverageLimitDollars(e.target.value)}
+                          placeholder="e.g. 50 (Leave blank for unlimited)"
+                          className="flex-1 border border-gray-300 bg-white rounded-xl px-3 py-1.5 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        If set, SMS deliveries will halt once overage charges reach this amount in a billing cycle.
+                      </p>
+                    </div>
+                  )}
+                </label>
+
+                {/* Option 1: Stop at 250 */}
+                <label
+                  onClick={() => setSmsUsageOption('STOP_AT_LIMIT')}
+                  className={`block p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    smsUsageOption === 'STOP_AT_LIMIT'
+                      ? 'border-blue-600 bg-blue-50/40 shadow-xs'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="radio"
+                      name="newEndpointSmsOption"
+                      checked={smsUsageOption === 'STOP_AT_LIMIT'}
+                      onChange={() => setSmsUsageOption('STOP_AT_LIMIT')}
+                      className="text-blue-600 focus:ring-blue-500 mt-0.5"
+                    />
+                    <span className="font-bold text-sm text-gray-900">Option 1: Stop at 250 Credits</span>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-2 pl-6 leading-relaxed">
+                    SMS delivery stops immediately when reaching 250 credits. Inbound email notifications continue, and automated warnings are sent at <strong>80%, 90%, and 100%</strong> usage. Delivery resumes at the next billing cycle.
+                  </p>
+                </label>
+              </div>
             </div>
           </div>
 

@@ -35,6 +35,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     label: z.string().max(100).optional(),
     notes: z.string().max(500).optional(),
     severityTag: z.string().max(50).optional(),
+    smsUsageOption: z.enum(['AUTO_OVERAGE', 'STOP_AT_LIMIT']).optional(),
+    monthlyOverageLimitCents: z.number().int().nonnegative().nullable().optional(),
   });
 
   try {

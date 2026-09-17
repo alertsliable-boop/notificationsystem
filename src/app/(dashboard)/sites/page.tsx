@@ -111,7 +111,17 @@ export default function SitesPage() {
       body: JSON.stringify({ name, address, customerId }),
     });
     const json = await res.json();
-    if (!res.ok) { setError(json.error || 'Failed'); setSaving(false); return; }
+    if (!res.ok) { 
+      if (json.code === 'TRIAL_LIMIT_EXCEEDED') {
+        setError('Your 7-day free trial includes 1 active site. Please subscribe to a paid plan in Billing to add additional physical sites.');
+      } else if (json.code === 'SUBSCRIPTION_INACTIVE') {
+        setError('Your subscription is inactive or your 7-day free trial has ended. Please activate your subscription in Billing.');
+      } else {
+        setError(json.error || 'Failed to save site'); 
+      }
+      setSaving(false); 
+      return; 
+    }
     
     closeForm();
     fetchData();

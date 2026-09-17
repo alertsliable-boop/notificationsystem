@@ -96,6 +96,8 @@ export async function processSmsFanout(job: Job) {
     body = messageContent || '';
   }
   body = body.trim().substring(0, 1600);
+  const { calculateSmsSegments } = await import('@/lib/phone');
+  const segments = calculateSmsSegments(body);
 
   const sendPromises = activeRecipients.map(async (er: any) => {
     const phoneRecipient = er.recipient;
@@ -111,8 +113,9 @@ export async function processSmsFanout(job: Job) {
         recipientId: phoneRecipient.id,
         providerSid: res.sid,
         status: 'QUEUED',
+        segments,
       });
-      console.log(`Successfully queued SMS ${res.sid} to ${phoneRecipient.phoneE164}`);
+      console.log(`Successfully queued SMS ${res.sid} (${segments} credit(s)) to ${phoneRecipient.phoneE164}`);
 
     } catch (error: any) {
       console.error(`Failed to send SMS to ${phoneRecipient.phoneE164}:`, error);
@@ -122,6 +125,7 @@ export async function processSmsFanout(job: Job) {
         recipientId: phoneRecipient.id,
         status: 'FAILED',
         errorCode: error.code?.toString() || 'UNKNOWN',
+        segments,
       });
     }
   });

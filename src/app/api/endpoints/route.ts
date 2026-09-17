@@ -60,6 +60,8 @@ const createEndpointSchema = z.object({
   siteId: z.string().min(1, 'Site is required'),
   severityTag: z.string().optional(),
   notes: z.string().optional(),
+  smsUsageOption: z.enum(['AUTO_OVERAGE', 'STOP_AT_LIMIT']).optional(),
+  monthlyOverageLimitCents: z.number().int().nonnegative().nullable().optional(),
   recipients: z.array(z.union([
     z.string(),
     z.object({
@@ -87,6 +89,8 @@ export async function POST(req: Request) {
       recipients: validated.recipients || [],
       notes: validated.notes,
       severityTag: validated.severityTag,
+      smsUsageOption: validated.smsUsageOption,
+      monthlyOverageLimitCents: validated.monthlyOverageLimitCents ?? undefined,
     });
 
     await auditLog(ctx, 'CREATE_ENDPOINT', 'InboundEndpoint', endpoint.id, {

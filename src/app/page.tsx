@@ -137,23 +137,26 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Pricing Minimal */}
+      {/* Pricing Section */}
       <section id="pricing" className="py-20 sm:py-32 px-4 sm:px-6 border-t border-[#E5E7EB]">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4">Transparent Pricing.</h2>
-            <p className="text-base sm:text-lg text-[#6B7280]">Subscriptions based on total alarm email endpoints. Strictly metered usage.</p>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4">Transparent Per-Site Pricing.</h2>
+            <p className="text-base sm:text-lg text-[#6B7280]">
+              Volume rates scale automatically with your active site count. Dedicated endpoints and strictly metered SMS credits.
+            </p>
           </div>
 
+          {/* 7-Day Free Trial Banner */}
           <div className="bg-gradient-to-br from-[#0A0A0A] to-[#1A1A1A] rounded-2xl p-6 sm:p-8 md:p-10 mb-10 text-white flex flex-col md:flex-row items-center justify-between shadow-2xl border border-neutral-800 gap-6">
             <div className="max-w-xl text-center md:text-left">
               <div className="inline-flex items-center gap-2 bg-white/10 text-white text-[11px] font-bold px-3 py-1 rounded-full mb-4 uppercase tracking-widest border border-white/10">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                Zero Risk
+                7-Day Free Trial
               </div>
               <h3 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 tracking-tight">Try Liable Alerts completely free.</h3>
               <p className="text-neutral-400 text-sm md:text-base leading-relaxed">
-                Start with a <strong>7-day free trial</strong> to test the platform. Includes exactly <strong>1 endpoint</strong>, <strong>10 total SMS messages</strong>, and up to <strong>2 recipients</strong>. No credit card required to start.
+                Start with a <strong>7-day free trial</strong> to test your equipment alarms. Includes <strong>1 site</strong>, <strong>1 dedicated endpoint</strong>, <strong>25 SMS delivery credits</strong>, and up to <strong>3 recipients</strong>. No setup fee. Paid subscription required after 7 days.
               </p>
             </div>
             <Link
@@ -164,16 +167,18 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Pricing Tiers */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { name: 'Starter', price: '19', endpoints: 1, highlight: false },
-              { name: 'Professional', price: '59', endpoints: 5, highlight: true },
-              { name: 'Business', price: '129', endpoints: 15, highlight: false },
+              { name: 'Starter', price: '49', range: '1–9 active sites', highlight: false },
+              { name: 'Professional', price: '44', range: '10–24 active sites', highlight: true },
+              { name: 'Professional Plus', price: '39', range: '25–49 active sites', highlight: false },
+              { name: 'Enterprise', price: '34', range: '50+ active sites', highlight: false },
             ].map((plan) => (
               <div
                 key={plan.name}
-                className={`relative p-6 sm:p-8 rounded-2xl border ${
-                  plan.highlight ? 'bg-black text-white border-black shadow-2xl' : 'bg-white border-[#E5E7EB]'
+                className={`relative p-6 sm:p-8 rounded-2xl border flex flex-col justify-between ${
+                  plan.highlight ? 'bg-black text-white border-black shadow-2xl scale-[1.02]' : 'bg-white border-[#E5E7EB]'
                 }`}
               >
                 {plan.highlight && (
@@ -181,23 +186,32 @@ export default function HomePage() {
                      Most Popular
                    </div>
                 )}
-                <h3 className={`font-semibold mb-2 ${plan.highlight ? '' : 'text-[#6B7280]'}`}>{plan.name}</h3>
-                <div className="flex items-baseline gap-1 mb-6">
-                  <span className="text-4xl font-bold">${plan.price}</span>
-                  <span className={`text-sm ${plan.highlight ? 'opacity-80' : 'text-[#6B7280]'}`}>/mo</span>
-                </div>
-                <div className="space-y-4 mb-8">
-                  <div className="flex items-center gap-3 text-sm">
-                    <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${plan.highlight ? 'text-white' : 'text-black'}`} />
-                    <span><strong>{plan.endpoints}</strong> Active {plan.endpoints === 1 ? 'Endpoint' : 'Endpoints'}</span>
+                <div>
+                  <h3 className={`font-semibold mb-1 ${plan.highlight ? 'text-white' : 'text-gray-900'}`}>{plan.name}</h3>
+                  <p className={`text-xs font-semibold mb-4 ${plan.highlight ? 'text-neutral-400' : 'text-blue-600'}`}>
+                    {plan.range}
+                  </p>
+                  <div className="flex items-baseline gap-1 mb-6">
+                    <span className="text-4xl font-bold">${plan.price}</span>
+                    <span className={`text-xs ${plan.highlight ? 'opacity-80' : 'text-[#6B7280]'}`}>/ site / month</span>
                   </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${plan.highlight ? 'text-white' : 'text-black'}`} />
-                    <span><strong>100</strong> SMS / endpoint / mo</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${plan.highlight ? 'text-white' : 'text-black'}`} />
-                    <span>Up to <strong>10</strong> recipients / endpoint</span>
+                  <div className="space-y-3 mb-8">
+                    <div className="flex items-center gap-2.5 text-xs">
+                      <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${plan.highlight ? 'text-white' : 'text-black'}`} />
+                      <span><strong>1 Dedicated</strong> Endpoint / site</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-xs">
+                      <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${plan.highlight ? 'text-white' : 'text-black'}`} />
+                      <span><strong>250 SMS</strong> credits / site / month</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-xs">
+                      <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${plan.highlight ? 'text-white' : 'text-black'}`} />
+                      <span>Up to <strong>10</strong> SMS recipients</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-xs">
+                      <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${plan.highlight ? 'text-white' : 'text-black'}`} />
+                      <span>Delivery history & usage tracking</span>
+                    </div>
                   </div>
                 </div>
                 <Link
@@ -213,27 +227,29 @@ export default function HomePage() {
           </div>
 
           <p className="text-xs text-center text-gray-500 mt-6">
-            * Text messages are metered per segment (up to 160 standard characters per segment). Alerts that split into 2 or more segments count as 2+ messages towards your monthly allowance.
+            * The applicable volume rate is based on your account's total number of active sites and applies to all sites. Unused SMS credits expire at the end of each monthly billing period.
           </p>
 
           {/* Detailed Pricing Policies */}
           <div className="mt-16 sm:mt-24 pt-12 sm:pt-16 border-t border-[#E5E7EB]/60">
             <div className="text-center mb-12 sm:mb-16">
               <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-3 sm:mb-4">How it all works together</h3>
-              <p className="text-sm sm:text-base text-[#6B7280] max-w-2xl mx-auto">Everything you need to know about combining plans, overage, and message routing.</p>
+              <p className="text-sm sm:text-base text-[#6B7280] max-w-2xl mx-auto">
+                Comprehensive explanation of physical sites, additional endpoints, and SMS delivery options.
+              </p>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12 max-w-4xl mx-auto">
-              {/* Left Column: Combining & Scaling */}
+              {/* Left Column: Physical Sites & Additional Endpoints */}
               <div className="space-y-8 sm:space-y-10">
                 <div className="flex gap-4">
                   <div className="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0 mt-1">
                     <Cpu className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-2">Combining Plans & Sites</h4>
+                    <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-2">What Each Site Includes</h4>
                     <p className="text-sm text-gray-600 leading-relaxed">
-                      Need 22 endpoints? Combine a Business plan (15), a Professional plan (5), and 2 Additional Endpoints under one company account. All endpoints merge into one single allowance that you can distribute across any number of sites.
+                      A <strong>Site</strong> represents one physical building, property, or customer location. Every active site includes one dedicated alarm email endpoint, up to 10 SMS recipients, 250 SMS credits per month, alarm & delivery history, and email support.
                     </p>
                   </div>
                 </div>
@@ -243,36 +259,36 @@ export default function HomePage() {
                     <Zap className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-2">Smart Upgrades</h4>
+                    <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-2">Additional Endpoints ($15/month)</h4>
                     <p className="text-sm text-gray-600 leading-relaxed">
-                      Additional endpoints cost <strong>$12/month</strong> each. We actively monitor your usage and will recommend upgrading when a larger plan becomes cheaper than paying for add-ons.
+                      Customers can add endpoints for additional systems located at the <strong>same physical site</strong> (for example: Main BMS, Chiller plant, Garage CO system, and Refrigeration). Each additional endpoint is <strong>$15/month</strong> and includes an additional <strong>250 SMS credits/month</strong>, dedicated email address, and up to 10 recipients.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Right Column: Limits & Overage */}
+              {/* Right Column: SMS Delivery Options & Overage */}
               <div className="space-y-8 sm:space-y-10">
                 <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center flex-shrink-0 mt-1">
-                    <Activity className="w-5 h-5 text-amber-600" />
+                  <div className="w-10 h-10 rounded-full bg-purple-50 border border-purple-100 flex items-center justify-center flex-shrink-0 mt-1">
+                    <ShieldCheck className="w-5 h-5 text-purple-600" />
                   </div>
                   <div>
-                    <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-2">Strictly Metered Limits & SMS Segments</h4>
+                    <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-2">Option 2: Automatic Overage Billing (Recommended)</h4>
                     <p className="text-sm text-gray-600 leading-relaxed">
-                      Each endpoint gets exactly <strong>100 SMS/month</strong>. Text messages are charged and counted per segment (standard 160 characters per SMS segment). If an alarm message exceeds this limit and splits into 2 message segments, it counts as 2 messages against that endpoint's quota. If an alarm splits into 2 segments and goes to 10 recipients, that counts as 20 messages. Messages are <em>not</em> pooled between endpoints.
+                      Critical alarms continue delivering even after the 250 included credits are used. Each additional block of <strong>250 SMS credits is $10</strong>. Customers can establish an optional monthly overage dollar cap for peace of mind.
                     </p>
                   </div>
                 </div>
 
                 <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-green-50 border border-green-100 flex items-center justify-center flex-shrink-0 mt-1">
-                    <ShieldCheck className="w-5 h-5 text-green-600" />
+                  <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center flex-shrink-0 mt-1">
+                    <Activity className="w-5 h-5 text-amber-600" />
                   </div>
                   <div>
-                    <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-2">Overage & Continuity</h4>
+                    <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-2">Option 1: Stop at 250 Credits</h4>
                     <p className="text-sm text-gray-600 leading-relaxed">
-                      Never miss an alarm. If you exceed 100 messages, paid accounts continue sending via metered billing at just <strong>$0.05 per additional SMS</strong>. Unused messages reset monthly and do not roll over.
+                      SMS delivery automatically stops when an endpoint reaches 250 credits. Automated usage warning notifications are sent to your team at <strong>80%, 90%, and 100%</strong>. Delivery resumes at the next billing cycle or whenever additional credits are purchased.
                     </p>
                   </div>
                 </div>

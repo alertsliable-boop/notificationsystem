@@ -23,12 +23,17 @@ export class DowngradeDeactivationRequiredError extends Error {
 }
 
 /**
- * Get subscription usage details for a company.
+ * Get subscription usage details for a company under the Site-based pricing model.
  */
 export async function getSubscriptionUsage(companyId: string) {
   const supabase = getAdminClient();
 
-  const [{ data: subscription }, { count: activeCount }, { data: allEndpoints }] = await Promise.all([
+  const [
+    { data: subscription },
+    { count: activeCount },
+    { count: activeSitesCount },
+    { data: allEndpoints },
+  ] = await Promise.all([
     supabase
       .from('CompanySubscription')
       .select('*, plan:SubscriptionPlan(*)')
@@ -40,28 +45,90 @@ export async function getSubscriptionUsage(companyId: string) {
       .eq('companyId', companyId)
       .eq('status', 'ACTIVE'),
     supabase
+      .from('Site')
+      .select('*', { count: 'exact', head: true })
+      .eq('companyId', companyId),
+    supabase
       .from('InboundEndpoint')
-      .select('id, label, localPart, status, createdAt, domain:Domain(hostname)')
+      .select('id, label, localPart, status, siteId, isAdditional, smsUsageOption, monthlyOverageLimitCents, notifiedAt80, notifiedAt90, notifiedAt100, createdAt, domain:Domain(hostname), site:Site(id, name)')
       .eq('companyId', companyId)
       .eq('status', 'ACTIVE')
       .order('createdAt', { ascending: false }),
   ]);
 
-  const baseMax = subscription?.plan?.maxActiveEndpoints ?? 1;
-  const extraMax = subscription?.extraEndpoints ?? 0;
-  const maxActiveEndpoints = baseMax + extraMax;
+  const isTrial = subscription?.plan?.code === 'free_trial' || subscription?.status === 'TRIALING';
+  const trialEnd = subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd) : null;
+  const isTrialExpired = Boolean(isTrial && trialEnd && new Date() > trialEnd);
+  const isSubscriptionActive = isTrial ? !isTrialExpired : (subscription?.status === 'ACTIVE');
+
+  // Sites and Endpoints Quota
+  const activeSitesQuota = isTrial ? 1 : Math.max(1, subscription?.activeSites || activeSitesCount || 1);
+  const extraEndpoints = subscription?.extraEndpoints ?? 0;
+  // Each site includes 1 endpoint + any purchased additional endpoints ($15/mo)
+  const maxActiveEndpoints = isTrial ? 1 : (activeSitesQuota + extraEndpoints);
   const currentActive = activeCount || 0;
   const isOverLimit = currentActive > maxActiveEndpoints;
   const remainingSlots = Math.max(0, maxActiveEndpoints - currentActive);
 
+  // Billing period for SMS credits
+  const periodStart = subscription?.currentPeriodStart || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Query SMS usage in current billing period
+  const { data: smsRows } = await supabase
+    .from('SmsMessage')
+    .select('id, segments, notification!inner(endpointId, companyId)')
+    .eq('notification.companyId', companyId)
+    .gte('createdAt', periodStart);
+
+  const endpointCreditMap = new Map<string, number>();
+  let totalCreditsUsed = 0;
+  (smsRows || []).forEach((row: any) => {
+    const epId = row.notification?.endpointId;
+    const segs = row.segments || 1;
+    totalCreditsUsed += segs;
+    if (epId) {
+      endpointCreditMap.set(epId, (endpointCreditMap.get(epId) || 0) + segs);
+    }
+  });
+
+  const includedCredits = isTrial ? 25 : (maxActiveEndpoints * 250);
+  const remainingCredits = Math.max(0, includedCredits - totalCreditsUsed);
+
+  // Enrich activeEndpoints with current period credit usage
+  const enrichedEndpoints = (allEndpoints || []).map((ep: any) => {
+    const used = endpointCreditMap.get(ep.id) || 0;
+    const limit = isTrial ? 25 : 250;
+    const overage = Math.max(0, used - limit);
+    const overageBlocks = overage > 0 ? Math.ceil(overage / 250) : 0;
+    const overageChargeDollars = overageBlocks * 10;
+    return {
+      ...ep,
+      creditsUsedThisPeriod: used,
+      creditsLimit: limit,
+      overageCredits: overage,
+      overageBlocks,
+      overageChargeDollars,
+    };
+  });
+
   return {
     subscription,
     plan: subscription?.plan,
+    isTrial,
+    isTrialExpired,
+    isSubscriptionActive,
+    activeSitesCount: activeSitesCount || 0,
+    activeSitesQuota,
+    extraEndpoints,
     activeCount: currentActive,
     maxActiveEndpoints,
     isOverLimit,
     remainingSlots,
-    activeEndpoints: allEndpoints || [],
+    includedCredits,
+    totalCreditsUsed,
+    remainingCredits,
+    activeEndpoints: enrichedEndpoints,
+    endpointCreditMap,
   };
 }
 
@@ -118,6 +185,8 @@ export async function createEndpoint({
   recipients,
   notes,
   severityTag,
+  smsUsageOption,
+  monthlyOverageLimitCents,
 }: {
   companyId: string;
   label: string;
@@ -128,16 +197,35 @@ export async function createEndpoint({
   recipients: Array<string | { phone: string; name?: string }>;
   notes?: string;
   severityTag?: string;
+  smsUsageOption?: string;
+  monthlyOverageLimitCents?: number;
 }) {
   const supabase = getAdminClient();
 
   // Check plan limits
   const usage = await getSubscriptionUsage(companyId);
-  if (usage.activeCount >= usage.maxActiveEndpoints) {
-    throw new PlanLimitExceededError();
+  if (!usage.isSubscriptionActive) {
+    throw new Error('Your subscription is not active or your free trial has ended. Please update your subscription in Billing.');
   }
 
-  const maxRecipients = usage.plan?.code === 'free_trial' ? 2 : 10;
+  // Check if site already has active endpoints
+  const { count: existingSiteEndpoints } = await supabase
+    .from('InboundEndpoint')
+    .select('*', { count: 'exact', head: true })
+    .eq('siteId', siteId)
+    .eq('status', 'ACTIVE');
+
+  const isAdditional = (existingSiteEndpoints || 0) > 0;
+
+  if (usage.activeCount >= usage.maxActiveEndpoints) {
+    if (isAdditional) {
+      throw new PlanLimitExceededError('Site already has 1 included endpoint. Please add additional endpoint capacity ($15/month) in Billing to add another endpoint to this site.');
+    } else {
+      throw new PlanLimitExceededError('Endpoint capacity limit reached. Upgrade your site subscription or add additional endpoint capacity ($15/mo) in Billing.');
+    }
+  }
+
+  const maxRecipients = usage.isTrial ? 3 : 10;
   if (recipients && recipients.length > maxRecipients) {
     throw new Error(`Maximum of ${maxRecipients} recipients allowed per endpoint on your current plan. Please upgrade or remove some recipients.`);
   }
@@ -197,6 +285,9 @@ export async function createEndpoint({
       notes,
       severityTag,
       status: 'ACTIVE',
+      isAdditional,
+      smsUsageOption: smsUsageOption || 'AUTO_OVERAGE',
+      monthlyOverageLimitCents: monthlyOverageLimitCents || null,
     })
     .select('*, domain:Domain(*), customer:Customer(*), site:Site(*)')
     .single();
@@ -354,38 +445,70 @@ export async function processInboundEmail(formEntries: Record<string, string>) {
     return { skipped: true };
   }
 
-  // Enforce plan limits on processing
+  // Enforce subscription and credit limits on inbound processing
   const usage = await getSubscriptionUsage(endpoint.companyId);
+  if (!usage.isSubscriptionActive) {
+    console.log(`[INBOUND] Company ${endpoint.companyId} subscription is not active (status: ${usage.subscription?.status}, trial expired: ${usage.isTrialExpired}). Skipping notification.`);
+    if (webhookEvent) {
+      await supabase.from('WebhookEvent').update({ processedAt: new Date().toISOString() }).eq('id', webhookEvent.id);
+    }
+    return { skipped: true, reason: 'subscription_inactive' };
+  }
+
   if (usage.activeCount > usage.maxActiveEndpoints) {
-    console.log(`[INBOUND] Company ${endpoint.companyId} is over endpoint limit (${usage.activeCount}/${usage.maxActiveEndpoints}). Skipping notification.`);
+    console.log(`[INBOUND] Company ${endpoint.companyId} is over endpoint capacity (${usage.activeCount}/${usage.maxActiveEndpoints}). Skipping notification.`);
     if (webhookEvent) {
       await supabase.from('WebhookEvent').update({ processedAt: new Date().toISOString() }).eq('id', webhookEvent.id);
     }
     return { skipped: true, reason: 'over_limit' };
   }
 
-  // Enforce Trial SMS Limit (10 total messages)
-  if (usage.plan?.code === 'free_trial') {
-    const { count: smsCount } = await supabase
-      .from('SmsMessage')
-      .select('id', { count: 'exact', head: true })
-      .eq('Notification.companyId', endpoint.companyId);
-      
-    // Because Supabase might not support eq over relationship easily without inner join, let's just count notifications and assume max 2 recipients
-    // Actually, a safer way is counting Notifications and multiplying by recipients, or querying raw. Let's do a simple Notifications count for now:
-    const { count: notifCount } = await supabase
-      .from('Notification')
-      .select('id', { count: 'exact', head: true })
-      .eq('companyId', endpoint.companyId);
-
-    // If they have 2 recipients, 5 notifications = 10 messages.
-    // Let's cap notifications at 10 to be safe.
-    if (notifCount !== null && notifCount >= 10) {
-      console.log(`[INBOUND] Company ${endpoint.companyId} has reached the Free Trial 10-message limit.`);
+  // Enforce Free Trial SMS Credit Limit (25 credits)
+  if (usage.isTrial) {
+    if (usage.totalCreditsUsed >= 25) {
+      console.log(`[INBOUND] Company ${endpoint.companyId} has reached the Free Trial 25 SMS credit limit.`);
       if (webhookEvent) {
         await supabase.from('WebhookEvent').update({ processedAt: new Date().toISOString() }).eq('id', webhookEvent.id);
       }
       return { skipped: true, reason: 'trial_limit_reached' };
+    }
+  } else {
+    // Paid Subscription: check per-endpoint credit usage
+    const epUsedCredits = usage.endpointCreditMap?.get(endpoint.id) || 0;
+    const smsOption = endpoint.smsUsageOption || 'AUTO_OVERAGE';
+
+    if (smsOption === 'STOP_AT_LIMIT') {
+      if (epUsedCredits >= 250) {
+        console.log(`[INBOUND] Endpoint ${endpoint.id} reached 250 credits and is set to Stop at 250. Skipping SMS delivery.`);
+        if (!endpoint.notifiedAt100) {
+          await supabase.from('InboundEndpoint').update({ notifiedAt100: true }).eq('id', endpoint.id);
+        }
+        if (webhookEvent) {
+          await supabase.from('WebhookEvent').update({ processedAt: new Date().toISOString() }).eq('id', webhookEvent.id);
+        }
+        return { skipped: true, reason: 'stop_at_limit_reached' };
+      }
+
+      // Check notification thresholds
+      if (epUsedCredits >= 225 && !endpoint.notifiedAt90) {
+        await supabase.from('InboundEndpoint').update({ notifiedAt90: true }).eq('id', endpoint.id);
+      } else if (epUsedCredits >= 200 && !endpoint.notifiedAt80) {
+        await supabase.from('InboundEndpoint').update({ notifiedAt80: true }).eq('id', endpoint.id);
+      }
+    } else {
+      // Option 2: AUTO_OVERAGE ($10 per block of 250 credits over 250)
+      if (epUsedCredits >= 250 && endpoint.monthlyOverageLimitCents) {
+        const overageCredits = epUsedCredits - 250;
+        const overageBlocks = Math.floor(overageCredits / 250) + 1;
+        const overageCostCents = overageBlocks * 1000;
+        if (overageCostCents > endpoint.monthlyOverageLimitCents) {
+          console.log(`[INBOUND] Endpoint ${endpoint.id} reached monthly overage cap ($${endpoint.monthlyOverageLimitCents / 100}). Skipping SMS delivery.`);
+          if (webhookEvent) {
+            await supabase.from('WebhookEvent').update({ processedAt: new Date().toISOString() }).eq('id', webhookEvent.id);
+          }
+          return { skipped: true, reason: 'overage_limit_exceeded' };
+        }
+      }
     }
   }
 

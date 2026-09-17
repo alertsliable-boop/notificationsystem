@@ -50,8 +50,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Additional endpoint price in Stripe ($12/month = 1200 cents)
-    const STRIPE_EXTRA_ENDPOINT_PRICE_ID = process.env.STRIPE_EXTRA_ENDPOINT_PRICE_ID || 'price_1UDETs33lejKAXgD3TMm7qgK';
+    // Additional endpoint price in Stripe ($15/month = 1500 cents)
+    const STRIPE_EXTRA_ENDPOINT_PRICE_ID = process.env.STRIPE_EXTRA_ENDPOINT_PRICE_ID || 'price_1UGi0d33lejKAXgDsWnNcIH4';
 
     // 1. Update Stripe subscription item if active subscription exists
     let stripeInvoiceId: string | null = null;
@@ -97,8 +97,8 @@ export async function POST(req: Request) {
         const defaultPm = customer?.invoice_settings?.default_payment_method;
         if (defaultPm) {
           // Create Stripe Subscription for this company
-          const planPriceId = sub.plan?.stripePriceId || 'price_1UDETm33lejKAXgDyjyOMrsY';
-          const items: any[] = [{ price: planPriceId, quantity: 1 }];
+          const planPriceId = sub.plan?.stripePriceId || process.env.NEXT_PUBLIC_STRIPE_SITE_PRICE_ID || 'price_1UGi0d33lejKAXgDiGPnXQXW';
+          const items: any[] = [{ price: planPriceId, quantity: Math.max(1, sub.activeSites || 1) }];
           if (newExtra > 0) {
             items.push({ price: STRIPE_EXTRA_ENDPOINT_PRICE_ID, quantity: newExtra });
           }
@@ -140,10 +140,10 @@ export async function POST(req: Request) {
           id: nanoid(),
           companyId: ctx.companyId,
           invoiceNumber: `INV-EP-${nanoid(6).toUpperCase()}`,
-          amountCents: addedQty * 1200,
+          amountCents: addedQty * 1500,
           currency: 'usd',
           status: 'paid',
-          description: `${addedQty} Additional Email Endpoint${addedQty > 1 ? 's' : ''} ($12.00/mo each)`,
+          description: `${addedQty} Additional Email Endpoint${addedQty > 1 ? 's' : ''} ($15.00/mo each)`,
           cardBrand: sub.cardBrand || 'Card',
           cardLast4: sub.cardLast4 || '••••',
           createdAt: new Date().toISOString(),
@@ -165,7 +165,7 @@ export async function POST(req: Request) {
       baseEndpoints: baseMax,
       totalMaxEndpoints: totalMax,
       message: addedQty > 0
-        ? `Successfully purchased ${addedQty} additional email endpoint${addedQty > 1 ? 's' : ''} for $${(addedQty * 12).toFixed(2)}/mo!`
+        ? `Successfully purchased ${addedQty} additional email endpoint${addedQty > 1 ? 's' : ''} for $${(addedQty * 15).toFixed(2)}/mo!`
         : 'Additional endpoints updated successfully.',
     });
   } catch (err: any) {

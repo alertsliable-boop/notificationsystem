@@ -57,3 +57,21 @@ export function formatPhoneDisplay(phone: string): string {
 
   return phone;
 }
+
+/**
+ * Calculate the number of SMS segments (credits) for a given text.
+ * GSM 7-bit: 160 characters for 1 segment, 153 for concatenated segments.
+ * Unicode: 70 characters for 1 segment, 67 for concatenated segments.
+ */
+export function calculateSmsSegments(text: string): number {
+  if (!text || text.length === 0) return 1;
+  const isUnicode = /[^\u0000-\u00ff]/.test(text);
+  const len = text.length;
+  if (!isUnicode) {
+    if (len <= 160) return 1;
+    return Math.ceil(len / 153);
+  } else {
+    if (len <= 70) return 1;
+    return Math.ceil(len / 67);
+  }
+}

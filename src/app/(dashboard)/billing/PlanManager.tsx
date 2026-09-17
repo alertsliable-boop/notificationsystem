@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/Badge';
 import {
   Loader2, ArrowUpCircle, TrendingUp, CreditCard, Plus, Minus,
   CheckCircle2, Shield, AlertCircle, FileText, Download, X,
-  Calendar, DollarSign, Layers, Lock, Sparkles, ExternalLink
+  Calendar, DollarSign, Layers, Lock, Sparkles, ExternalLink,
+  Building, Sliders, MessageSquare, Check
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -472,7 +473,7 @@ export function AdditionalEndpointsManager({
   };
 
   const totalCapacity = basePlanMax + selectedCount;
-  const monthlyCost = selectedCount * 12;
+  const monthlyCost = selectedCount * 15;
   const hasChanged = selectedCount !== extraCount;
 
   return (
@@ -483,13 +484,13 @@ export function AdditionalEndpointsManager({
             <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
               +1
             </div>
-            <h3 className="text-[17px] font-bold text-gray-900">Additional Email Endpoints</h3>
+            <h3 className="text-[17px] font-bold text-gray-900">Additional Endpoints (Same Site)</h3>
             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-              $12.00 / month each
+              $15.00 / month each
             </span>
           </div>
           <p className="text-[13px] text-gray-500">
-            Need more email endpoints without upgrading to a larger plan? Purchase individual endpoints with any plan.
+            Add endpoints for multiple systems located at the same physical site (e.g., Main BMS, Chiller plant, Garage CO, Refrigeration). Each includes an extra 250 SMS credits/mo and up to 10 recipients.
           </p>
         </div>
       </div>
@@ -541,7 +542,7 @@ export function AdditionalEndpointsManager({
             {totalCapacity} Total Endpoints
           </p>
           <p className="text-[11px] text-gray-500">
-            {basePlanMax} from {planName} plan + {selectedCount} purchased
+            {basePlanMax} included with active sites + {selectedCount} purchased ($15/mo each)
           </p>
         </div>
 
@@ -579,7 +580,7 @@ export function AdditionalEndpointsManager({
                   <CreditCard className="w-5 h-5" />
                 </span>
                 <div>
-                  <h3 className="font-bold text-[17px] text-gray-900">Confirm Endpoint Capacity Purchase</h3>
+                  <h3 className="font-bold text-[17px] text-gray-900">Confirm Additional Endpoints Purchase</h3>
                   <p className="text-xs text-gray-500">Review charge details and billing proration</p>
                 </div>
               </div>
@@ -603,12 +604,12 @@ export function AdditionalEndpointsManager({
             <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-gray-500 font-medium">New Total Capacity:</span>
-                <span className="font-bold text-gray-900">{totalCapacity} Endpoints ({basePlanMax} plan + {selectedCount} extra)</span>
+                <span className="font-bold text-gray-900">{totalCapacity} Endpoints ({basePlanMax} sites + {selectedCount} extra)</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-gray-500 font-medium">Capacity Adjustment:</span>
                 <span className="font-bold text-blue-600">
-                  {selectedCount - extraCount > 0 ? `+${selectedCount - extraCount}` : `${selectedCount - extraCount}`} Endpoints ($12.00/mo each)
+                  {selectedCount - extraCount > 0 ? `+${selectedCount - extraCount}` : `${selectedCount - extraCount}`} Endpoints ($15.00/mo each)
                 </span>
               </div>
               <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
@@ -797,6 +798,599 @@ export function ChargeHistorySection() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 5. Active Site Volume Tier Calculator & Subscription Plan Switcher
+export function SitePricingCalculator({
+  currentActiveSites,
+  currentSubscribedSites,
+  currentPlanCode,
+  isTrial,
+}: {
+  currentActiveSites: number;
+  currentSubscribedSites: number;
+  currentPlanCode?: string;
+  isTrial?: boolean;
+}) {
+  const [siteCount, setSiteCount] = useState<number>(
+    Math.max(1, currentSubscribedSites || currentActiveSites || 1)
+  );
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const router = useRouter();
+
+  const getTierInfo = (sites: number) => {
+    if (sites >= 50) return { rate: 34, code: 'site_enterprise', name: 'Enterprise', range: '50+ sites' };
+    if (sites >= 25) return { rate: 39, code: 'site_pro_plus', name: 'Professional Plus', range: '25–49 sites' };
+    if (sites >= 10) return { rate: 44, code: 'site_pro', name: 'Professional', range: '10–24 sites' };
+    return { rate: 49, code: 'site_starter', name: 'Starter', range: '1–9 sites' };
+  };
+
+  const currentTier = getTierInfo(siteCount);
+  const monthlyTotal = siteCount * currentTier.rate;
+  const includedCredits = siteCount * 250;
+
+  const TIERS = [
+    { code: 'site_starter', name: 'Starter', range: '1–9 sites', rate: 49, desc: 'For growing facilities & single-site operations' },
+    { code: 'site_pro', name: 'Professional', range: '10–24 sites', rate: 44, desc: 'For regional property management & multiple sites' },
+    { code: 'site_pro_plus', name: 'Professional Plus', range: '25–49 sites', rate: 39, desc: 'For campus portfolios & facility managers' },
+    { code: 'site_enterprise', name: 'Enterprise', range: '50+ sites', rate: 34, desc: 'For enterprise multi-property infrastructure' },
+  ];
+
+  const handleSubscribe = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/billing/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planCode: currentTier.code,
+          activeSites: siteCount,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || 'Failed to initialize subscription checkout');
+        setLoading(false);
+        return;
+      }
+
+      if (json.url) {
+        window.location.href = json.url;
+      } else {
+        router.refresh();
+        setLoading(false);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error processing request');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div id="plans" className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 sm:p-8 space-y-8">
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold text-[11px] border border-blue-200">
+            Per-Site Volume Tiering
+          </span>
+        </div>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+          Liable Alerts Per-Site Pricing Plans
+        </h2>
+        <p className="text-sm text-gray-500 mt-1 max-w-3xl">
+          Charge per active physical site. The applicable volume rate is determined by your account’s total number of active sites and applies to all sites. Each site includes 1 dedicated alarm email address, up to 10 recipients, and 250 SMS credits/mo.
+        </p>
+      </div>
+
+      {/* Tier Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {TIERS.map((tier) => {
+          const isSelectedTier = currentTier.code === tier.code;
+          return (
+            <div
+              key={tier.code}
+              onClick={() => {
+                if (tier.code === 'site_starter' && siteCount > 9) setSiteCount(5);
+                else if (tier.code === 'site_pro' && (siteCount < 10 || siteCount > 24)) setSiteCount(15);
+                else if (tier.code === 'site_pro_plus' && (siteCount < 25 || siteCount > 49)) setSiteCount(30);
+                else if (tier.code === 'site_enterprise' && siteCount < 50) setSiteCount(50);
+              }}
+              className={`p-5 rounded-2xl border-2 cursor-pointer transition-all duration-200 flex flex-col justify-between ${
+                isSelectedTier
+                  ? 'border-blue-600 bg-blue-50/50 shadow-md ring-2 ring-blue-600/10'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[12px] font-bold uppercase tracking-wider text-gray-500">
+                    {tier.name}
+                  </span>
+                  {isSelectedTier && (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold text-[10px]">
+                      Selected
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-1 my-2">
+                  <span className="text-3xl font-extrabold text-gray-900">${tier.rate}</span>
+                  <span className="text-xs text-gray-500 font-medium">/ site / mo</span>
+                </div>
+                <span className="inline-block text-[11px] font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-md mb-2">
+                  {tier.range}
+                </span>
+                <p className="text-[12px] text-gray-500 leading-relaxed">
+                  {tier.desc}
+                </p>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-gray-100 space-y-1.5 text-[11px] text-gray-600">
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                  <span>1 Endpoint included / site</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                  <span>250 SMS credits / site</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                  <span>Up to 10 recipients / endpoint</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Interactive Site Counter & Slider */}
+      <div className="bg-gray-50/80 rounded-2xl p-6 border border-gray-200 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+              Calculate Your Plan: Number of Active Sites
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Select or type the total number of customer properties or buildings you manage
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setSiteCount(Math.max(1, siteCount - 1))}
+              className="w-10 h-10 rounded-xl bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center justify-center font-bold text-lg shadow-xs transition"
+            >
+              <Minus className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center justify-center px-4 py-2 bg-white border-2 border-blue-500 rounded-xl min-w-[90px]">
+              <span className="font-mono text-xl font-bold text-gray-900">{siteCount}</span>
+              <span className="text-xs text-gray-500 font-medium ml-1.5">sites</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSiteCount(siteCount + 1)}
+              className="w-10 h-10 rounded-xl bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 flex items-center justify-center font-bold text-lg shadow-xs transition"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Range Slider */}
+        <div className="space-y-2">
+          <input
+            type="range"
+            min={1}
+            max={60}
+            value={siteCount}
+            onChange={(e) => setSiteCount(parseInt(e.target.value, 10))}
+            className="w-full accent-blue-600 h-2 bg-gray-200 rounded-lg cursor-pointer"
+          />
+          <div className="flex justify-between text-[11px] text-gray-400 font-semibold px-1">
+            <span>1 Site ($49/ea)</span>
+            <span>10 Sites ($44/ea)</span>
+            <span>25 Sites ($39/ea)</span>
+            <span>50+ Sites ($34/ea)</span>
+          </div>
+        </div>
+
+        {/* Quick select buttons */}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <span className="text-[11px] font-bold text-gray-400 mr-1">Quick Select:</span>
+          {[1, 5, 10, 20, 25, 40, 50, 100].map((qty) => (
+            <button
+              key={qty}
+              type="button"
+              onClick={() => setSiteCount(qty)}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                siteCount === qty
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+              }`}
+            >
+              {qty} {qty === 1 ? 'Site' : 'Sites'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Pricing Summary & Checkout Card */}
+      <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white rounded-2xl p-6 sm:p-7 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/30 text-xs font-bold">
+              {currentTier.name} Plan Tier ({currentTier.range})
+            </span>
+            <span className="text-xs text-blue-200">
+              • ${currentTier.rate} per site
+            </span>
+          </div>
+
+          <div className="flex items-baseline gap-2">
+            <span className="text-4xl font-extrabold tracking-tight">${monthlyTotal}</span>
+            <span className="text-sm text-blue-200 font-medium">/ month total</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 text-xs text-blue-200/90 pt-1">
+            <span>✓ <strong>{siteCount}</strong> Primary Endpoints Included</span>
+            <span>✓ <strong>{includedCredits.toLocaleString()}</strong> SMS Credits / Month</span>
+            <span>✓ Up to 10 SMS Recipients each</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-stretch md:items-end gap-2 flex-shrink-0">
+          {error && (
+            <span className="text-red-300 text-xs font-medium max-w-xs">{error}</span>
+          )}
+          <button
+            type="button"
+            onClick={handleSubscribe}
+            disabled={loading}
+            className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <CreditCard className="w-4 h-4" />
+            )}
+            {isTrial ? `Subscribe for ${siteCount} Site${siteCount > 1 ? 's' : ''}` : `Update to ${siteCount} Site${siteCount > 1 ? 's' : ''}`}
+          </button>
+          <span className="text-[11px] text-blue-300 text-center md:text-right">
+            Instant activation via Stripe • Cancel or adjust anytime
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 6. Endpoint SMS Credits & Automatic Overage Management Section
+export function SmsUsageOverview({
+  includedCredits,
+  totalCreditsUsed,
+  endpoints,
+  isTrial,
+}: {
+  includedCredits: number;
+  totalCreditsUsed: number;
+  endpoints: any[];
+  isTrial?: boolean;
+}) {
+  const [selectedEndpoint, setSelectedEndpoint] = useState<any | null>(null);
+  const [newOption, setNewOption] = useState<'STOP_AT_LIMIT' | 'AUTO_OVERAGE'>('AUTO_OVERAGE');
+  const [overageCapDollars, setOverageCapDollars] = useState<string>('');
+  const [saving, setSaving] = useState(false);
+  const router = useRouter();
+
+  const usagePercent = Math.min(100, Math.round((totalCreditsUsed / Math.max(1, includedCredits)) * 100));
+
+  const handleOpenModal = (ep: any) => {
+    setSelectedEndpoint(ep);
+    setNewOption(ep.smsUsageOption === 'STOP_AT_LIMIT' ? 'STOP_AT_LIMIT' : 'AUTO_OVERAGE');
+    setOverageCapDollars(ep.monthlyOverageLimitCents ? String(ep.monthlyOverageLimitCents / 100) : '');
+  };
+
+  const handleSaveEndpointSettings = async () => {
+    if (!selectedEndpoint) return;
+    setSaving(true);
+
+    try {
+      const capCents = overageCapDollars.trim() ? Math.round(parseFloat(overageCapDollars) * 100) : null;
+      const res = await fetch(`/api/endpoints/${selectedEndpoint.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          smsUsageOption: newOption,
+          monthlyOverageLimitCents: capCents,
+        }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json();
+        alert(json.error || 'Failed to update SMS settings');
+        setSaving(false);
+        return;
+      }
+
+      setSelectedEndpoint(null);
+      router.refresh();
+    } catch (err: any) {
+      alert(err.message || 'Error updating settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 sm:p-8 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-5">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <MessageSquare className="w-5 h-5 text-blue-600" />
+            <h3 className="text-lg font-bold text-gray-900">SMS Delivery Credits &amp; Overage Options</h3>
+          </div>
+          <p className="text-xs sm:text-sm text-gray-500">
+            Each endpoint includes 250 monthly SMS delivery credits. Choose whether delivery stops at 250 or continues with Automatic Overage Billing.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-200 flex-shrink-0">
+          <div>
+            <span className="text-[11px] text-gray-500 uppercase font-bold block">Account Credits</span>
+            <span className="text-base font-bold text-gray-900">
+              {totalCreditsUsed} / {includedCredits} used
+            </span>
+          </div>
+          <div className="w-16 bg-gray-200 h-2 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full ${
+                usagePercent >= 100 ? 'bg-red-600' : usagePercent >= 80 ? 'bg-amber-500' : 'bg-blue-600'
+              }`}
+              style={{ width: `${usagePercent}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Two Options Explanatory Comparison */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Option 1 */}
+        <div className="p-4 rounded-xl border border-gray-200 bg-gray-50/70 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-700">Option 1</span>
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
+              Strict Cap
+            </span>
+          </div>
+          <h4 className="font-bold text-sm text-gray-900">Stop at 250 Credits</h4>
+          <p className="text-xs text-gray-600 leading-relaxed">
+            SMS delivery halts when this endpoint reaches 250 credits. Alerts are sent at 80%, 90%, and 100%. SMS resumes at the next monthly cycle.
+          </p>
+        </div>
+
+        {/* Option 2 */}
+        <div className="p-4 rounded-xl border-2 border-blue-200 bg-blue-50/50 space-y-2 relative">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-900">Option 2</span>
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-600 text-white">
+              Recommended
+            </span>
+          </div>
+          <h4 className="font-bold text-sm text-blue-950">Automatic Overage Billing ($10 / block)</h4>
+          <p className="text-xs text-blue-800 leading-relaxed">
+            Ensures mission-critical alarms never stop forwarding. Each additional block of 250 SMS credits costs $10 (0–250: Included, 251–500: $10, 501–750: $20, etc.). You can set an optional monthly budget cap.
+          </p>
+        </div>
+      </div>
+
+      {/* Endpoints Credit Usage Table */}
+      <div className="overflow-x-auto border border-gray-100 rounded-xl">
+        <table className="w-full text-left text-xs min-w-[600px]">
+          <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-100 uppercase tracking-wider text-[10.5px]">
+            <tr>
+              <th className="px-4 py-3">Endpoint</th>
+              <th className="px-4 py-3">Site Location</th>
+              <th className="px-4 py-3">Credits Used This Month</th>
+              <th className="px-4 py-3">Usage Option</th>
+              <th className="px-4 py-3 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 text-gray-700">
+            {endpoints.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-gray-400">
+                  No active email endpoints configured.
+                </td>
+              </tr>
+            ) : (
+              endpoints.map((ep) => {
+                const isStop = ep.smsUsageOption === 'STOP_AT_LIMIT';
+                const used = ep.creditsUsedThisPeriod || 0;
+                const limit = ep.creditsLimit || (isTrial ? 25 : 250);
+                const epPct = Math.min(100, Math.round((used / limit) * 100));
+
+                return (
+                  <tr key={ep.id} className="hover:bg-gray-50/80 transition-colors">
+                    <td className="px-4 py-3.5">
+                      <p className="font-bold text-gray-900">{ep.label}</p>
+                      <p className="text-[11px] text-blue-600 font-mono">{ep.localPart}@{ep.domain?.hostname || 'alarms.liablealerts.com'}</p>
+                    </td>
+                    <td className="px-4 py-3.5 font-medium text-gray-600">
+                      {ep.site?.name || 'Main Site'}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="space-y-1 max-w-[140px]">
+                        <div className="flex justify-between text-[11px] font-semibold">
+                          <span>{used} / {limit}</span>
+                          <span className={used >= limit ? 'text-red-600' : 'text-gray-400'}>{epPct}%</span>
+                        </div>
+                        <div className="w-full bg-gray-150 h-1.5 rounded-full overflow-hidden bg-gray-200">
+                          <div
+                            className={`h-full rounded-full ${
+                              used >= limit ? 'bg-red-600' : used >= 200 ? 'bg-amber-500' : 'bg-blue-600'
+                            }`}
+                            style={{ width: `${epPct}%` }}
+                          />
+                        </div>
+                        {ep.overageChargeDollars > 0 && (
+                          <span className="text-[10px] font-bold text-amber-700 block">
+                            +${ep.overageChargeDollars} Overage ({ep.overageCredits} extra credits)
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      {isStop ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
+                          Stop at 250
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          Auto-Overage ($10/block)
+                          {ep.monthlyOverageLimitCents ? ` (Cap: $${ep.monthlyOverageLimitCents / 100})` : ''}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenModal(ep)}
+                        className="px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold text-xs transition"
+                      >
+                        Configure
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Configure Modal */}
+      {selectedEndpoint && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="font-bold text-base text-gray-900">Configure SMS Usage Option</h3>
+                <p className="text-xs text-gray-500">{selectedEndpoint.label}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedEndpoint(null)}
+                className="p-1 text-gray-400 hover:text-gray-700 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label
+                onClick={() => setNewOption('AUTO_OVERAGE')}
+                className={`p-3.5 rounded-xl border-2 cursor-pointer flex items-start gap-3 transition ${
+                  newOption === 'AUTO_OVERAGE'
+                    ? 'border-blue-600 bg-blue-50/50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="smsOption"
+                  checked={newOption === 'AUTO_OVERAGE'}
+                  onChange={() => setNewOption('AUTO_OVERAGE')}
+                  className="mt-0.5 text-blue-600"
+                />
+                <div className="text-xs space-y-1">
+                  <span className="font-bold text-gray-900 block">
+                    Option 2: Automatic Overage Billing (Recommended)
+                  </span>
+                  <p className="text-gray-500">
+                    Alarms continue after 250 credits. Each extra 250 SMS credits costs $10.
+                  </p>
+                </div>
+              </label>
+
+              {newOption === 'AUTO_OVERAGE' && (
+                <div className="pl-7 pr-2 space-y-1.5">
+                  <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block">
+                    Optional Monthly Spend Cap ($)
+                  </label>
+                  <input
+                    type="number"
+                    min={10}
+                    step={10}
+                    value={overageCapDollars}
+                    onChange={(e) => setOverageCapDollars(e.target.value)}
+                    placeholder="e.g. 50 (leave empty for unlimited)"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
+                  />
+                  <span className="text-[10px] text-gray-400 block">
+                    Leave blank to allow uninterrupted critical alarms.
+                  </span>
+                </div>
+              )}
+
+              <label
+                onClick={() => setNewOption('STOP_AT_LIMIT')}
+                className={`p-3.5 rounded-xl border-2 cursor-pointer flex items-start gap-3 transition ${
+                  newOption === 'STOP_AT_LIMIT'
+                    ? 'border-blue-600 bg-blue-50/50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="smsOption"
+                  checked={newOption === 'STOP_AT_LIMIT'}
+                  onChange={() => setNewOption('STOP_AT_LIMIT')}
+                  className="mt-0.5 text-blue-600"
+                />
+                <div className="text-xs space-y-1">
+                  <span className="font-bold text-gray-900 block">
+                    Option 1: Stop at 250 Credits
+                  </span>
+                  <p className="text-gray-500">
+                    SMS delivery stops when this endpoint hits 250 credits. Warnings sent at 80%, 90%, 100%.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedEndpoint(null)}
+                disabled={saving}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEndpointSettings}
+                disabled={saving}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-2"
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                Save Setting
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

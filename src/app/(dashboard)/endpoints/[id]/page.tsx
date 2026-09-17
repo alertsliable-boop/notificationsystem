@@ -58,6 +58,28 @@ export default async function EndpointDetailPage({
     
   const recentNotifications = recentNotificationsData || [];
 
+  const { data: subscription } = await supabase
+    .from('CompanySubscription')
+    .select('*, plan:SubscriptionPlan(*)')
+    .eq('companyId', membership.companyId)
+    .single();
+
+  const isTrial = subscription?.plan?.code === 'free_trial' || subscription?.status === 'TRIALING';
+  const periodStart = subscription?.currentPeriodStart || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: smsRows } = await supabase
+    .from('SmsMessage')
+    .select('segments, notification!inner(endpointId)')
+    .eq('notification.endpointId', endpoint.id)
+    .gte('createdAt', periodStart);
+
+  const creditsUsed = (smsRows || []).reduce((sum: number, row: any) => sum + (row.segments || 1), 0);
+  const creditsLimit = isTrial ? 25 : 250;
+  const usagePercent = Math.min(100, Math.round((creditsUsed / creditsLimit) * 100));
+  const overageCredits = Math.max(0, creditsUsed - creditsLimit);
+  const overageBlocks = overageCredits > 0 ? Math.ceil(overageCredits / 250) : 0;
+  const overageChargeDollars = overageBlocks * 10;
+
   const emailAddress = `${endpoint.localPart}@${endpoint.domain?.hostname || 'alarms.liablealerts.com'}`;
   const isActive = endpoint.status === 'ACTIVE';
 
@@ -103,6 +125,8 @@ export default async function EndpointDetailPage({
             endpointId={endpoint.id}
             status={endpoint.status}
             emailAddress={emailAddress}
+            smsUsageOption={endpoint.smsUsageOption}
+            monthlyOverageLimitCents={endpoint.monthlyOverageLimitCents}
             recipients={recipientsList}
           />
         </div>
@@ -112,14 +136,14 @@ export default async function EndpointDetailPage({
         {/* Left: Notification History & Delivery Logs */}
         <div className="lg:col-span-2 space-y-6">
           {/* Stats Summary */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
                   <Bell className="w-5 h-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wide">Total Inbound Alerts</p>
+                  <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wide">Total Alerts</p>
                   <p className="text-[22px] font-bold text-gray-900">{endpoint._count.notifications}</p>
                 </div>
               </div>
@@ -131,10 +155,41 @@ export default async function EndpointDetailPage({
                   <Phone className="w-5 h-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wide">Configured Recipients</p>
-                  <p className="text-[22px] font-bold text-gray-900">{recipientsList.length}</p>
+                  <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wide">Recipients</p>
+                  <p className="text-[22px] font-bold text-gray-900">
+                    {recipientsList.length} <span className="text-xs text-gray-400 font-normal">/ {isTrial ? '3' : '10'}</span>
+                  </p>
                 </div>
               </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  usagePercent >= 100 ? 'bg-red-50 text-red-600' : usagePercent >= 80 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+                }`}>
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wide truncate">SMS Credits</p>
+                  <p className="text-[20px] font-bold text-gray-900">
+                    {creditsUsed} <span className="text-xs text-gray-400 font-normal">/ {creditsLimit}</span>
+                  </p>
+                </div>
+              </div>
+              <div className="w-full bg-gray-100 h-1.5 rounded-full mt-3 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    usagePercent >= 100 ? 'bg-red-500' : usagePercent >= 80 ? 'bg-amber-500' : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${Math.min(100, usagePercent)}%` }}
+                />
+              </div>
+              {overageChargeDollars > 0 && (
+                <p className="text-[10px] text-purple-700 font-semibold mt-1">
+                  +${overageChargeDollars} Overage ({overageBlocks} block{overageBlocks > 1 ? 's' : ''})
+                </p>
+              )}
             </div>
           </div>
 
@@ -275,6 +330,40 @@ export default async function EndpointDetailPage({
                 <span className="text-gray-500">Created Date</span>
                 <span className="text-gray-700">
                   {new Date(endpoint.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* SMS Quota & Billing Policy */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
+            <h3 className="text-[13px] font-bold text-gray-900 flex items-center justify-between">
+              <span>SMS Quota & Billing</span>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                {endpoint.isAdditional ? '$15/mo Add-on' : 'Included with Site'}
+              </span>
+            </h3>
+            <div className="space-y-2.5 text-[12px]">
+              <div className="flex justify-between py-1 border-b border-gray-50">
+                <span className="text-gray-500">Included Credits</span>
+                <span className="font-semibold text-gray-900">{creditsLimit} SMS/month</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-gray-50">
+                <span className="text-gray-500">Overage Policy</span>
+                <span className={`font-semibold ${endpoint.smsUsageOption === 'STOP_AT_LIMIT' ? 'text-amber-700' : 'text-blue-600'}`}>
+                  {endpoint.smsUsageOption === 'STOP_AT_LIMIT' ? 'Stop at Limit' : 'Auto Overage ($10/block)'}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-gray-50">
+                <span className="text-gray-500">Spend Cap</span>
+                <span className="text-gray-700 font-mono">
+                  {endpoint.monthlyOverageLimitCents ? `$${(endpoint.monthlyOverageLimitCents / 100).toFixed(2)}/mo` : 'Unlimited'}
+                </span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-gray-500">Cycle Overage</span>
+                <span className={`font-semibold ${overageChargeDollars > 0 ? 'text-purple-700' : 'text-emerald-600'}`}>
+                  {overageChargeDollars > 0 ? `$${overageChargeDollars}.00` : '$0.00'}
                 </span>
               </div>
             </div>

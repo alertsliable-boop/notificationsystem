@@ -5,13 +5,15 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import {
-  ToggleLeft, ToggleRight, Loader2, Copy, CheckCheck, Plus, Trash2, Phone, AlertCircle
+  ToggleLeft, ToggleRight, Loader2, Copy, CheckCheck, Plus, Trash2, Phone, AlertCircle, Settings, ShieldCheck, X
 } from 'lucide-react';
 
 interface EndpointActionsProps {
   endpointId: string;
   status: 'ACTIVE' | 'INACTIVE';
   emailAddress: string;
+  smsUsageOption?: 'AUTO_OVERAGE' | 'STOP_AT_LIMIT';
+  monthlyOverageLimitCents?: number | null;
   recipients: Array<{
     id: string;
     recipient: {
@@ -23,12 +25,27 @@ interface EndpointActionsProps {
   }>;
 }
 
-export function EndpointActions({ endpointId, status: initialStatus, emailAddress, recipients: initialRecipients }: EndpointActionsProps) {
+export function EndpointActions({
+  endpointId,
+  status: initialStatus,
+  emailAddress,
+  smsUsageOption = 'AUTO_OVERAGE',
+  monthlyOverageLimitCents = null,
+  recipients: initialRecipients
+}: EndpointActionsProps) {
   const router = useRouter();
   const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE'>(initialStatus);
   const [toggling, setToggling] = useState(false);
   const [copied, setCopied] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // SMS Usage Option state
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [usageOption, setUsageOption] = useState<'AUTO_OVERAGE' | 'STOP_AT_LIMIT'>(smsUsageOption);
+  const [overageLimitDollars, setOverageLimitDollars] = useState<string>(
+    monthlyOverageLimitCents ? (monthlyOverageLimitCents / 100).toString() : ''
+  );
+  const [savingConfig, setSavingConfig] = useState(false);
 
   // Add Recipient state
   const [showAddRecipient, setShowAddRecipient] = useState(false);
@@ -147,6 +164,41 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
     }
   };
 
+  const handleSaveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingConfig(true);
+    setErrorMsg('');
+
+    try {
+      const limitCents = overageLimitDollars.trim() !== ''
+        ? Math.round(parseFloat(overageLimitDollars) * 100)
+        : null;
+
+      const res = await fetch(`/api/endpoints/${endpointId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          smsUsageOption: usageOption,
+          monthlyOverageLimitCents: limitCents,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error || 'Failed to update SMS settings');
+        setSavingConfig(false);
+        return;
+      }
+
+      setShowConfigModal(false);
+      router.refresh();
+    } catch (err: any) {
+      alert(err.message || 'Error updating SMS settings');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
   const isActive = status === 'ACTIVE';
 
   return (
@@ -161,7 +213,7 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
         </div>
       )}
 
-      {/* Header Controls: Toggle Status + Copy Address */}
+      {/* Header Controls: Toggle Status + Copy Address + SMS Usage Policy */}
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <button
           onClick={handleCopyEmail}
@@ -169,6 +221,14 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
         >
           {copied ? <CheckCheck className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
           {copied ? 'Copied!' : 'Copy Email Address'}
+        </button>
+
+        <button
+          onClick={() => setShowConfigModal(true)}
+          className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 border border-blue-200 bg-blue-50/70 text-blue-700 text-xs font-semibold rounded-xl hover:bg-blue-100 transition-colors"
+        >
+          <Settings className="w-4 h-4 text-blue-600" />
+          SMS Usage Policy
         </button>
 
         <button
@@ -190,6 +250,129 @@ export function EndpointActions({ endpointId, status: initialStatus, emailAddres
           {isActive ? 'Endpoint Active' : 'Endpoint Inactive'}
         </button>
       </div>
+
+      {/* SMS Usage Configuration Modal */}
+      {showConfigModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative space-y-5">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <ShieldCheck className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-bold text-[17px] text-gray-900">Configure SMS Usage Policy</h3>
+                  <p className="text-xs text-gray-500">Each endpoint includes 250 monthly SMS delivery credits.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfigModal(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveConfig} className="space-y-4">
+              {/* Option 2: Auto Overage (Recommended) */}
+              <label
+                onClick={() => setUsageOption('AUTO_OVERAGE')}
+                className={`block p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  usageOption === 'AUTO_OVERAGE'
+                    ? 'border-blue-600 bg-blue-50/40 shadow-xs'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="radio"
+                      name="smsUsageOption"
+                      checked={usageOption === 'AUTO_OVERAGE'}
+                      onChange={() => setUsageOption('AUTO_OVERAGE')}
+                      className="text-blue-600 focus:ring-blue-500 mt-0.5"
+                    />
+                    <div>
+                      <span className="font-bold text-sm text-gray-900">Option 2: Automatic Overage Billing</span>
+                      <span className="ml-2 inline-block px-2 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-full uppercase tracking-wider">
+                        Recommended
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600 mt-2 pl-6 leading-relaxed">
+                  SMS notifications continue uninterrupted after the 250 included credits. Each additional block of <strong>250 SMS credits is $10</strong> billed automatically. Recommended so critical alarm notifications do not stop.
+                </p>
+
+                {usageOption === 'AUTO_OVERAGE' && (
+                  <div className="mt-3 pl-6 pt-3 border-t border-blue-100">
+                    <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                      Monthly Spend Cap (Optional)
+                    </label>
+                    <div className="flex items-center gap-2 max-w-xs">
+                      <span className="text-sm font-semibold text-gray-500">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="10"
+                        value={overageLimitDollars}
+                        onChange={(e) => setOverageLimitDollars(e.target.value)}
+                        placeholder="e.g. 50 (Leave blank for unlimited)"
+                        className="flex-1 border border-gray-300 bg-white rounded-xl px-3 py-1.5 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      If set, SMS deliveries will halt once overage charges reach this amount in a billing cycle.
+                    </p>
+                  </div>
+                )}
+              </label>
+
+              {/* Option 1: Stop at 250 */}
+              <label
+                onClick={() => setUsageOption('STOP_AT_LIMIT')}
+                className={`block p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  usageOption === 'STOP_AT_LIMIT'
+                    ? 'border-blue-600 bg-blue-50/40 shadow-xs'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="radio"
+                    name="smsUsageOption"
+                    checked={usageOption === 'STOP_AT_LIMIT'}
+                    onChange={() => setUsageOption('STOP_AT_LIMIT')}
+                    className="text-blue-600 focus:ring-blue-500 mt-0.5"
+                  />
+                  <span className="font-bold text-sm text-gray-900">Option 1: Stop at 250 Credits</span>
+                </div>
+                <p className="text-xs text-gray-600 mt-2 pl-6 leading-relaxed">
+                  SMS delivery stops immediately when this endpoint reaches 250 credits. Inbound email notifications continue, and automated warnings are sent at <strong>80%, 90%, and 100%</strong> usage. Delivery resumes at the next billing cycle.
+                </p>
+              </label>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowConfigModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingConfig}
+                  className="px-5 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                >
+                  {savingConfig ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Save Settings'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Inline Recipient Manager Box */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

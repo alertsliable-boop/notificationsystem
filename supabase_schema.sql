@@ -84,11 +84,24 @@ CREATE TABLE IF NOT EXISTS "CompanySubscription" (
 -- Ensure columns exist on CompanySubscription if table was already created
 ALTER TABLE "CompanySubscription" ADD COLUMN IF NOT EXISTS "stripeCustomerId" TEXT;
 ALTER TABLE "CompanySubscription" ADD COLUMN IF NOT EXISTS "extraEndpoints" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "CompanySubscription" ADD COLUMN IF NOT EXISTS "activeSites" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "CompanySubscription" ADD COLUMN IF NOT EXISTS "currentPeriodStart" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "CompanySubscription" ADD COLUMN IF NOT EXISTS "cardBrand" TEXT;
 ALTER TABLE "CompanySubscription" ADD COLUMN IF NOT EXISTS "cardLast4" TEXT;
 ALTER TABLE "CompanySubscription" ADD COLUMN IF NOT EXISTS "cardExpMonth" INTEGER;
 ALTER TABLE "CompanySubscription" ADD COLUMN IF NOT EXISTS "cardExpYear" INTEGER;
 ALTER TABLE "CompanySubscription" ADD COLUMN IF NOT EXISTS "billingEmail" TEXT;
+
+-- Ensure columns exist on InboundEndpoint
+ALTER TABLE "InboundEndpoint" ADD COLUMN IF NOT EXISTS "smsUsageOption" TEXT NOT NULL DEFAULT 'AUTO_OVERAGE';
+ALTER TABLE "InboundEndpoint" ADD COLUMN IF NOT EXISTS "monthlyOverageLimitCents" INTEGER;
+ALTER TABLE "InboundEndpoint" ADD COLUMN IF NOT EXISTS "isAdditional" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "InboundEndpoint" ADD COLUMN IF NOT EXISTS "notifiedAt80" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "InboundEndpoint" ADD COLUMN IF NOT EXISTS "notifiedAt90" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "InboundEndpoint" ADD COLUMN IF NOT EXISTS "notifiedAt100" BOOLEAN NOT NULL DEFAULT false;
+
+-- Ensure columns exist on SmsMessage
+ALTER TABLE "SmsMessage" ADD COLUMN IF NOT EXISTS "segments" INTEGER NOT NULL DEFAULT 1;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "Domain" (
@@ -351,7 +364,12 @@ END $$;
 -- Insert default subscription plans
 INSERT INTO "SubscriptionPlan" ("id", "code", "name", "maxActiveEndpoints", "priceCents")
 VALUES 
-  ('plan_starter_1', 'starter', 'Starter', 5, 2900),
-  ('plan_pro_1', 'pro', 'Professional', 25, 9900),
-  ('plan_biz_1', 'business', 'Business', 100, 29900)
-ON CONFLICT ("code") DO NOTHING;
+  ('plan_free_trial', 'free_trial', 'Free Trial (7 Days)', 1, 0),
+  ('plan_site_starter', 'site_starter', 'Starter (1–9 sites)', 1, 4900),
+  ('plan_site_pro', 'site_pro', 'Professional (10–24 sites)', 1, 4400),
+  ('plan_site_pro_plus', 'site_pro_plus', 'Professional Plus (25–49 sites)', 1, 3900),
+  ('plan_site_enterprise', 'site_enterprise', 'Enterprise (50+ sites)', 1, 3400)
+ON CONFLICT ("code") DO UPDATE SET
+  "name" = EXCLUDED."name",
+  "maxActiveEndpoints" = EXCLUDED."maxActiveEndpoints",
+  "priceCents" = EXCLUDED."priceCents";

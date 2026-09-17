@@ -26,13 +26,19 @@ export async function GET() {
     supabase.from('SmsMessage').select('*, notification!inner(companyId)', { count: 'exact', head: true }).eq('notification.companyId', ctx.companyId),
   ]);
 
+  const isTrial = subscription?.plan?.code === 'free_trial' || subscription?.status === 'TRIALING';
+  const activeSites = subscription?.activeSites || 1;
+  const maxEndpoints = isTrial ? 1 : (activeSites + (subscription?.extraEndpoints ?? 0));
   const deliveryRate = (totalSms || 0) > 0 ? Math.round((((totalSms || 0) - (failedSms || 0)) / (totalSms || 0)) * 100) : 100;
 
   return NextResponse.json({
     data: {
       activeEndpoints: activeCount || 0,
-      maxEndpoints: (subscription?.plan?.maxActiveEndpoints ?? 1) + (subscription?.extraEndpoints ?? 0),
-      planName: subscription?.plan?.name ?? 'Starter',
+      maxEndpoints,
+      activeSites,
+      extraEndpoints: subscription?.extraEndpoints ?? 0,
+      isTrial,
+      planName: subscription?.plan?.name ?? (isTrial ? '7-Day Free Trial' : 'Site Subscription'),
       planStatus: subscription?.status ?? 'ACTIVE',
       notificationsLast24h: last24hNotifs || 0,
       failedSmsCount: failedSms || 0,

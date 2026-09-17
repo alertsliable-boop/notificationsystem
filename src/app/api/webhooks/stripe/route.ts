@@ -28,18 +28,29 @@ export async function POST(req: Request) {
       const session = event.data.object as any;
       const companyId = session.metadata?.companyId || session.client_reference_id;
       const planCode = session.metadata?.planCode;
+      const activeSites = parseInt(session.metadata?.activeSites || '1', 10) || 1;
       const extraEndpoints = parseInt(session.metadata?.extraEndpoints || '0', 10) || 0;
       const stripeCustomerId = session.customer;
 
-      if (companyId && planCode) {
+      if (companyId) {
+        // Map planCode based on activeSites if needed
+        let targetCode = planCode || 'site_starter';
+        if (!planCode || planCode.startsWith('site_')) {
+          if (activeSites >= 50) targetCode = 'site_enterprise';
+          else if (activeSites >= 25) targetCode = 'site_pro_plus';
+          else if (activeSites >= 10) targetCode = 'site_pro';
+          else targetCode = 'site_starter';
+        }
+
         const { data: plan } = await supabase
           .from('SubscriptionPlan')
           .select('*')
-          .eq('code', planCode)
+          .eq('code', targetCode)
           .single();
 
         if (plan) {
           const subscriptionId = session.subscription || session.id;
+          const currentPeriodStart = new Date().toISOString();
           const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
           // Fetch default card details from Stripe customer if available
@@ -77,7 +88,9 @@ export async function POST(req: Request) {
             status: 'ACTIVE',
             stripeSubscriptionId: subscriptionId,
             stripeCustomerId: stripeCustomerId || undefined,
+            activeSites,
             extraEndpoints,
+            currentPeriodStart,
             currentPeriodEnd,
             ...cardDetails,
           };
@@ -97,7 +110,7 @@ export async function POST(req: Request) {
           }
 
           // Record in-app billing invoice
-          const totalAmount = session.amount_total || (plan.priceCents + extraEndpoints * 1200);
+          const totalAmount = session.amount_total || (plan.priceCents * activeSites + extraEndpoints * 1500);
           await supabase
             .from('BillingInvoice')
             .insert({
@@ -108,14 +121,14 @@ export async function POST(req: Request) {
               amountCents: totalAmount,
               currency: session.currency || 'usd',
               status: 'paid',
-              description: `Subscription to ${plan.name} Plan${extraEndpoints > 0 ? ` + ${extraEndpoints} Extra Endpoint(s)` : ''}`,
+              description: `Subscription: ${activeSites} Active Site(s) (${plan.name})${extraEndpoints > 0 ? ` + ${extraEndpoints} Additional Endpoint(s)` : ''}`,
               cardBrand: cardDetails.cardBrand || 'Card',
               cardLast4: cardDetails.cardLast4 || '••••',
               pdfUrl: null,
               createdAt: new Date().toISOString(),
             });
 
-          console.log(`[STRIPE WEBHOOK] Activated plan ${planCode} for company ${companyId}`);
+          console.log(`[STRIPE WEBHOOK] Activated site subscription for company ${companyId}: ${activeSites} sites, ${extraEndpoints} extra endpoints`);
         }
       }
       break;
@@ -129,21 +142,50 @@ export async function POST(req: Request) {
                      subscription.status === 'past_due' ? 'PAST_DUE' :
                      subscription.status === 'canceled' ? 'CANCELED' : 'ACTIVE';
                      
-      const currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
-      const priceId = subscription.items?.data?.[0]?.price?.id;
-      
-      let updateData: any = { status, currentPeriodEnd };
+      const currentPeriodStart = subscription.current_period_start
+        ? new Date(subscription.current_period_start * 1000).toISOString()
+        : new Date().toISOString();
+      const currentPeriodEnd = subscription.current_period_end
+        ? new Date(subscription.current_period_end * 1000).toISOString()
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-      if (priceId) {
-        const { data: plan } = await supabase
+      // Look for site item and extra endpoints item in subscription items
+      const sitePriceId = process.env.NEXT_PUBLIC_STRIPE_SITE_PRICE_ID || 'price_1UGi0d33lejKAXgDiGPnXQXW';
+      const extraPriceId = process.env.STRIPE_EXTRA_ENDPOINT_PRICE_ID || 'price_1UGi0d33lejKAXgDsWnNcIH4';
+
+      let sitesQty: number | null = null;
+      let extraQty: number | null = null;
+
+      for (const item of (subscription.items?.data || [])) {
+        if (item.price?.id === sitePriceId || item.price?.recurring?.tiers_mode === 'volume') {
+          sitesQty = item.quantity;
+        } else if (item.price?.id === extraPriceId) {
+          extraQty = item.quantity;
+        }
+      }
+
+      let updateData: any = { status, currentPeriodStart, currentPeriodEnd };
+      if (sitesQty !== null && sitesQty > 0) {
+        updateData.activeSites = sitesQty;
+        // Determine matching plan code based on sites quantity
+        let planCode = 'site_starter';
+        if (sitesQty >= 50) planCode = 'site_enterprise';
+        else if (sitesQty >= 25) planCode = 'site_pro_plus';
+        else if (sitesQty >= 10) planCode = 'site_pro';
+
+        const { data: matchedPlan } = await supabase
           .from('SubscriptionPlan')
           .select('id')
-          .eq('stripePriceId', priceId)
+          .eq('code', planCode)
           .single();
-          
-        if (plan) {
-          updateData.planId = plan.id;
+
+        if (matchedPlan) {
+          updateData.planId = matchedPlan.id;
         }
+      }
+
+      if (extraQty !== null) {
+        updateData.extraEndpoints = extraQty;
       }
 
       await supabase
@@ -151,7 +193,49 @@ export async function POST(req: Request) {
         .update(updateData)
         .eq('stripeSubscriptionId', stripeSubId);
 
-      console.log(`[STRIPE WEBHOOK] Subscription ${stripeSubId} updated. Status: ${status}`);
+      console.log(`[STRIPE WEBHOOK] Subscription ${stripeSubId} updated. Status: ${status}, Sites: ${sitesQty ?? 'unchanged'}`);
+      break;
+    }
+
+    case 'invoice.paid': {
+      const invoice = event.data.object as any;
+      const stripeSubId = invoice.subscription;
+      if (stripeSubId && invoice.amount_paid > 0) {
+        const { data: sub } = await supabase
+          .from('CompanySubscription')
+          .select('companyId, cardBrand, cardLast4')
+          .eq('stripeSubscriptionId', stripeSubId)
+          .single();
+
+        if (sub?.companyId) {
+          // Verify if invoice already recorded
+          const { data: existingInv } = await supabase
+            .from('BillingInvoice')
+            .select('id')
+            .eq('stripeInvoiceId', invoice.id)
+            .single();
+
+          if (!existingInv) {
+            await supabase
+              .from('BillingInvoice')
+              .insert({
+                id: nanoid(),
+                companyId: sub.companyId,
+                stripeInvoiceId: invoice.id,
+                invoiceNumber: invoice.number || `INV-${nanoid(6).toUpperCase()}`,
+                amountCents: invoice.amount_paid,
+                currency: invoice.currency || 'usd',
+                status: 'paid',
+                description: invoice.description || 'Monthly Subscription Renewal',
+                cardBrand: sub.cardBrand || 'Card',
+                cardLast4: sub.cardLast4 || '••••',
+                pdfUrl: invoice.invoice_pdf || null,
+                createdAt: new Date().toISOString(),
+              });
+            console.log(`[STRIPE WEBHOOK] Recorded recurring invoice for company ${sub.companyId}`);
+          }
+        }
+      }
       break;
     }
 
