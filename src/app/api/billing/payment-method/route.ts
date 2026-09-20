@@ -32,7 +32,7 @@ export async function GET() {
       const defaultPm = customer?.invoice_settings?.default_payment_method;
       if (defaultPm?.card) {
         cardData = {
-          brand: defaultPm.card.brand,
+          brand: defaultPm.card.brand ? (defaultPm.card.brand.charAt(0).toUpperCase() + defaultPm.card.brand.slice(1)) : 'Card',
           last4: defaultPm.card.last4,
           expMonth: defaultPm.card.exp_month,
           expYear: defaultPm.card.exp_year,
@@ -65,7 +65,7 @@ export async function GET() {
   });
 }
 
-// POST /api/billing/payment-method — Update payment method in-app
+// POST /api/billing/payment-method — Securely attach tokenized payment method (PCI DSS Compliant)
 export async function POST(req: Request) {
   const ctx = await requireAuth();
   if (isUnauthorizedResponse(ctx)) return ctx;
@@ -76,147 +76,132 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { cardNumber, expMonth, expYear, cvc, cardholderName, billingEmail, postalCode } = body;
 
-    const cleanNumber = (cardNumber || '').replace(/\D/g, '');
-    const cleanMonth = parseInt(expMonth, 10);
-    const cleanYear = parseInt(expYear, 10);
-    const cleanCvc = (cvc || '').trim();
-
-    if (!cleanNumber || cleanNumber.length < 13 || cleanNumber.length > 19) {
-      return NextResponse.json({ error: 'Invalid card number' }, { status: 400 });
+    // Reject any raw card data submissions immediately
+    if (body.cardNumber || body.cvc) {
+      return NextResponse.json({
+        error: 'Direct raw card processing is disabled for PCI DSS security. Please use Stripe Elements.',
+      }, { status: 400 });
     }
 
-    if (!cleanMonth || cleanMonth < 1 || cleanMonth > 12) {
-      return NextResponse.json({ error: 'Invalid expiration month' }, { status: 400 });
-    }
-
-    const fullYear = cleanYear < 100 ? 2000 + cleanYear : cleanYear;
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
-
-    if (fullYear < currentYear || (fullYear === currentYear && cleanMonth < currentMonth)) {
-      return NextResponse.json({ error: 'Card expiration date has already passed' }, { status: 400 });
-    }
-
-    if (!cleanCvc || cleanCvc.length < 3) {
-      return NextResponse.json({ error: 'Invalid CVC / security code' }, { status: 400 });
-    }
+    let { paymentMethodId, setupIntentId } = body;
 
     const supabase = getAdminClient();
 
     // Fetch company & subscription
-    const [{ data: company }, { data: sub }] = await Promise.all([
+    const [{ data: company }, { data: sub }, { data: user }] = await Promise.all([
       supabase.from('Company').select('*').eq('id', ctx.companyId).single(),
       supabase.from('CompanySubscription').select('*').eq('companyId', ctx.companyId).single(),
+      supabase.from('User').select('email, name').eq('id', ctx.userId).single(),
     ]);
 
-    let detectedBrand = 'Visa';
-    if (cleanNumber.startsWith('4')) detectedBrand = 'Visa';
-    else if (/^5[1-5]/.test(cleanNumber)) detectedBrand = 'Mastercard';
-    else if (/^3[47]/.test(cleanNumber)) detectedBrand = 'Amex';
-    else if (/^6(?:011|5)/.test(cleanNumber)) detectedBrand = 'Discover';
-
-    const last4 = cleanNumber.slice(-4);
     let stripeCustomerId = sub?.stripeCustomerId;
 
-    // Process with Stripe if configured
     if (isStripeConfigured()) {
-      try {
-        // Ensure Stripe customer exists
-        if (!stripeCustomerId) {
-          const newCust = await stripe.customers.create({
-            name: cardholderName || company?.name || 'Customer',
-            email: billingEmail || undefined,
-            metadata: { companyId: ctx.companyId },
-          });
-          stripeCustomerId = newCust.id;
-        }
-
-        // Create PaymentMethod in Stripe
-        const paymentMethod = await stripe.paymentMethods.create({
-          type: 'card',
-          card: {
-            number: cleanNumber,
-            exp_month: cleanMonth,
-            exp_year: fullYear,
-            cvc: cleanCvc,
-          },
-          billing_details: {
-            name: cardholderName || company?.name,
-            email: billingEmail || undefined,
-            address: postalCode ? { postal_code: postalCode } : undefined,
-          },
+      // Ensure customer exists in Stripe
+      if (!stripeCustomerId) {
+        const newCust = await stripe.customers.create({
+          name: company?.name || user?.name || 'Workspace Customer',
+          email: sub?.billingEmail || user?.email || undefined,
+          metadata: { companyId: ctx.companyId },
         });
+        stripeCustomerId = newCust.id;
+      }
 
-        // Attach to customer
+      // If setupIntentId was provided instead of paymentMethodId, extract paymentMethod from SetupIntent
+      if (!paymentMethodId && setupIntentId) {
+        const si = await stripe.setupIntents.retrieve(setupIntentId);
+        paymentMethodId = typeof si.payment_method === 'string' ? si.payment_method : si.payment_method?.id;
+      }
+
+      if (!paymentMethodId) {
+        return NextResponse.json({ error: 'Missing payment method identifier' }, { status: 400 });
+      }
+
+      // Retrieve the payment method directly from Stripe
+      const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+
+      if (paymentMethod.type !== 'card' || !paymentMethod.card) {
+        return NextResponse.json({ error: 'Selected payment method is not a valid card' }, { status: 400 });
+      }
+
+      // Attach payment method to Stripe customer if not already attached
+      if (paymentMethod.customer !== stripeCustomerId) {
         await stripe.paymentMethods.attach(paymentMethod.id, {
           customer: stripeCustomerId,
         });
-
-        // Set as default payment method
-        await stripe.customers.update(stripeCustomerId, {
-          invoice_settings: {
-            default_payment_method: paymentMethod.id,
-          },
-        });
-
-        if (paymentMethod.card?.brand) {
-          detectedBrand = paymentMethod.card.brand.charAt(0).toUpperCase() + paymentMethod.card.brand.slice(1);
-        }
-      } catch (stripeErr: any) {
-        console.error('[Stripe PaymentMethod Error]', stripeErr);
-        return NextResponse.json({ error: stripeErr.message || 'Payment method was declined by the card issuer' }, { status: 400 });
       }
-    }
 
-    // Update CompanySubscription in database
-    if (sub) {
-      await supabase
-        .from('CompanySubscription')
-        .update({
-          stripeCustomerId: stripeCustomerId || sub.stripeCustomerId,
-          cardBrand: detectedBrand,
-          cardLast4: last4,
-          cardExpMonth: cleanMonth,
-          cardExpYear: fullYear,
-          billingEmail: billingEmail || sub.billingEmail,
-        })
-        .eq('id', sub.id);
-    } else {
-      await supabase
-        .from('CompanySubscription')
-        .insert({
-          companyId: ctx.companyId,
-          planId: 'plan_starter_1',
-          status: 'ACTIVE',
-          stripeCustomerId: stripeCustomerId || null,
-          cardBrand: detectedBrand,
-          cardLast4: last4,
-          cardExpMonth: cleanMonth,
-          cardExpYear: fullYear,
-          billingEmail: billingEmail || null,
-        });
-    }
+      // Set as default payment method on customer invoice settings
+      await stripe.customers.update(stripeCustomerId, {
+        invoice_settings: {
+          default_payment_method: paymentMethod.id,
+        },
+      });
 
-    await auditLog(ctx, 'UPDATE_PAYMENT_METHOD', 'CompanySubscription', ctx.companyId, {
-      brand: detectedBrand,
-      last4,
-    });
+      const brand = paymentMethod.card.brand
+        ? paymentMethod.card.brand.charAt(0).toUpperCase() + paymentMethod.card.brand.slice(1)
+        : 'Card';
+      const last4 = paymentMethod.card.last4;
+      const expMonth = paymentMethod.card.exp_month;
+      const expYear = paymentMethod.card.exp_year;
+      const cardholderName = paymentMethod.billing_details?.name || '';
+      const billingEmail = paymentMethod.billing_details?.email || sub?.billingEmail || user?.email || '';
 
-    return NextResponse.json({
-      success: true,
-      card: {
-        brand: detectedBrand,
+      // Update CompanySubscription in database with safe non-sensitive metadata only
+      if (sub) {
+        await supabase
+          .from('CompanySubscription')
+          .update({
+            stripeCustomerId,
+            cardBrand: brand,
+            cardLast4: last4,
+            cardExpMonth: expMonth,
+            cardExpYear: expYear,
+            billingEmail,
+          })
+          .eq('id', sub.id);
+      } else {
+        await supabase
+          .from('CompanySubscription')
+          .insert({
+            companyId: ctx.companyId,
+            planId: 'plan_starter_1',
+            status: 'ACTIVE',
+            stripeCustomerId,
+            cardBrand: brand,
+            cardLast4: last4,
+            cardExpMonth: expMonth,
+            cardExpYear: expYear,
+            billingEmail,
+          });
+      }
+
+      await auditLog(ctx, 'UPDATE_PAYMENT_METHOD', 'CompanySubscription', ctx.companyId, {
+        brand,
         last4,
-        expMonth: cleanMonth,
-        expYear: fullYear,
-        cardholderName,
-        billingEmail,
-      },
-    });
+      });
+
+      return NextResponse.json({
+        success: true,
+        card: {
+          brand,
+          last4,
+          expMonth,
+          expYear,
+          cardholderName,
+          billingEmail,
+        },
+      });
+    }
+
+    // Fallback if Stripe is not configured
+    return NextResponse.json({
+      error: 'Stripe is not configured on this environment.',
+    }, { status: 400 });
+
   } catch (err: any) {
-    console.error('Error updating payment method:', err);
-    return NextResponse.json({ error: err.message || 'Failed to update payment method' }, { status: 500 });
+    console.error('Error saving payment method:', err);
+    return NextResponse.json({ error: err.message || 'Failed to save payment method' }, { status: 500 });
   }
 }

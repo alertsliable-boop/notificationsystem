@@ -26,12 +26,12 @@ export const metadata = { title: 'Billing & Site Pricing Plans | Liable Alerts' 
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; session_id?: string }>;
+  searchParams: Promise<{ status?: string; session_id?: string; setup_success?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/login');
 
-  const { status, session_id } = await searchParams;
+  const { status, session_id, setup_success } = await searchParams;
 
   const supabase = getAdminClient();
   const { data: membership } = await supabase
@@ -40,6 +40,65 @@ export default async function BillingPage({
     .eq('userId', session.user.id)
     .single();
   if (!membership) return null;
+
+  // Handle return from Stripe Hosted Setup Session (Card update)
+  if ((status === 'setup_success' || setup_success === 'true') && session_id && isStripeConfigured()) {
+    try {
+      const setupSession = await stripe.checkout.sessions.retrieve(session_id, {
+        expand: ['setup_intent.payment_method'],
+      });
+      if (setupSession.customer) {
+        const custId = setupSession.customer as string;
+        let pm: any = (setupSession.setup_intent as any)?.payment_method;
+        if (!pm) {
+          const pms = await stripe.paymentMethods.list({ customer: custId, type: 'card', limit: 1 });
+          pm = pms.data[0];
+        }
+        if (pm?.card) {
+          const brand = pm.card.brand ? (pm.card.brand.charAt(0).toUpperCase() + pm.card.brand.slice(1)) : 'Card';
+          const last4 = pm.card.last4;
+          const expMonth = pm.card.exp_month;
+          const expYear = pm.card.exp_year;
+          const billingEmail = pm.billing_details?.email || setupSession.customer_details?.email || null;
+
+          await stripe.customers.update(custId, {
+            invoice_settings: { default_payment_method: pm.id },
+          });
+
+          const { data: existingSub } = await supabase
+            .from('CompanySubscription')
+            .select('id')
+            .eq('companyId', membership.companyId)
+            .single();
+
+          if (existingSub?.id) {
+            await supabase.from('CompanySubscription').update({
+              stripeCustomerId: custId,
+              cardBrand: brand,
+              cardLast4: last4,
+              cardExpMonth: expMonth,
+              cardExpYear: expYear,
+              billingEmail,
+            }).eq('id', existingSub.id);
+          } else {
+            await supabase.from('CompanySubscription').insert({
+              companyId: membership.companyId,
+              planId: 'plan_starter_1',
+              status: 'ACTIVE',
+              stripeCustomerId: custId,
+              cardBrand: brand,
+              cardLast4: last4,
+              cardExpMonth: expMonth,
+              cardExpYear: expYear,
+              billingEmail,
+            });
+          }
+        }
+      }
+    } catch (setupErr) {
+      console.error('[Billing Page Setup Sync Error]', setupErr);
+    }
+  }
 
   // If returning from Stripe Checkout, verify and sync subscription immediately
   if (status === 'success' && session_id && isStripeConfigured()) {
@@ -155,6 +214,17 @@ export default async function BillingPage({
   return (
     <div className="space-y-8 sm:space-y-10 animate-fadeIn max-w-5xl py-4 sm:py-6">
       {/* Success/Cancel Banners */}
+      {(status === 'setup_success' || setup_success === 'true') && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-2xl flex items-start gap-3 animate-fadeIn shadow-xs">
+          <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h3 className="font-semibold text-green-900 text-sm">Payment Method Updated!</h3>
+            <p className="text-green-700 text-xs sm:text-sm mt-1">
+              Your credit card details have been securely saved and set as default with Stripe.
+            </p>
+          </div>
+        </div>
+      )}
       {(status === 'success' || status === 'updated') && (
         <div className="p-4 bg-green-50 border border-green-200 rounded-2xl flex items-start gap-3 animate-fadeIn shadow-xs">
           <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />

@@ -194,8 +194,8 @@ export async function POST(req: Request) {
       data: membership,
       emailSent,
       message: emailSent
-        ? `Invitation email successfully sent to ${email} (with reply-to ${senderEmail}).`
-        : `Team member added. Email notification status: ${emailError || 'pending'}.`,
+        ? `Invitation email successfully sent to ${email}. Please have the newly invited member check their junk mail or spam folder.`
+        : `Team member added. Email notification status: ${emailError || 'pending'}. Please have them check their junk mail or spam folder once delivered.`,
     }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Validation error' }, { status: 400 });

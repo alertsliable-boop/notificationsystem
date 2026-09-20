@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Mail, Loader2, Trash2, Plus } from 'lucide-react';
+import { Mail, Loader2, Trash2, Plus, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 export function TeamInviteForm({ onAdd }: { onAdd?: () => void }) {
   const [email, setEmail] = useState('');
@@ -33,11 +33,11 @@ export function TeamInviteForm({ onAdd }: { onAdd?: () => void }) {
     setEmail('');
     setRole('MEMBER');
     setSaving(false);
-    setSuccessMsg(json.message || `Invitation sent to ${invitedEmail}!`);
+    setSuccessMsg(json.message || `Invitation sent to ${invitedEmail}! Please have the newly invited member check their junk mail or spam folder.`);
     if (onAdd) onAdd();
     setTimeout(() => {
       window.location.reload();
-    }, 1500);
+    }, 4500);
   };
 
   return (
@@ -48,14 +48,34 @@ export function TeamInviteForm({ onAdd }: { onAdd?: () => void }) {
         </div>
         <div className="flex-1">
           <h3 className="text-[15px] font-bold text-gray-900 mb-1">Add Team Member</h3>
-          <p className="text-[13px] text-gray-600">
-            Invite a new member to your workspace by entering their email address. They will receive an email invitation with reply-to cariasm@live.com.
+          <p className="text-[13px] text-gray-600 mb-2">
+            Invite a new member to your workspace by entering their email address. They will receive an email invitation with login instructions.
           </p>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-100/70 border border-blue-200/80 rounded-lg text-[12px] text-blue-800 font-medium">
+            <Info className="w-3.5 h-3.5 flex-shrink-0 text-blue-600" />
+            <span>Please have the newly invited member check their junk mail or spam folder if they do not see the invite in their inbox.</span>
+          </div>
         </div>
       </div>
       
-      {error && <div className="text-red-500 bg-red-50 border border-red-100 p-3 rounded-lg text-[13px] mb-4">{error}</div>}
-      {successMsg && <div className="text-green-700 bg-green-50 border border-green-200 p-3 rounded-lg text-[13px] font-medium mb-4">{successMsg}</div>}
+      {error && (
+        <div className="text-red-600 bg-red-50 border border-red-200 p-3.5 rounded-xl text-[13px] mb-4 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-500" />
+          <span>{error}</span>
+        </div>
+      )}
+      
+      {successMsg && (
+        <div className="text-green-800 bg-green-50 border border-green-200 p-4 rounded-xl text-[13px] mb-4 space-y-1.5 animate-fadeIn">
+          <div className="flex items-center gap-2 font-bold text-green-800">
+            <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+          <p className="text-[12px] text-green-700 font-medium pl-6">
+            📨 <strong>Reminder:</strong> Please have the newly invited member check their junk mail or spam folder.
+          </p>
+        </div>
+      )}
       
       <form onSubmit={handleInvite} className="flex flex-col sm:flex-row gap-3 items-end">
         <div className="flex-1 w-full">

@@ -10,6 +10,8 @@ import {
   Building, Sliders, MessageSquare, Check
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { loadStripe, Stripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 interface PlanManagerProps {
   planCode: string;
@@ -87,21 +89,177 @@ export function SwitchPlanButton({ planCode, planName, currentPrice, newPrice, i
   );
 }
 
-// 2. In-App Payment Method & Card Details Manager
+// 2. In-App Payment Method & Card Details Manager (Stripe Elements + SetupIntent Flow)
+const stripePromiseMap: Record<string, Promise<Stripe | null>> = {};
+function getStripePromise(key?: string | null) {
+  const publishableKey = key || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  if (!publishableKey) return null;
+  if (!stripePromiseMap[publishableKey]) {
+    stripePromiseMap[publishableKey] = loadStripe(publishableKey);
+  }
+  return stripePromiseMap[publishableKey];
+}
+
+function StripeCardForm({
+  clientSecret,
+  onSuccess,
+  onCancel,
+}: {
+  clientSecret: string;
+  onSuccess: (card: any) => void;
+  onCancel: () => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [cardholderName, setCardholderName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setSaving(true);
+    setError('');
+
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) {
+      setError('Card input field is loading. Please try again in a moment.');
+      setSaving(false);
+      return;
+    }
+
+    try {
+      const { setupIntent, error: stripeError } = await stripe.confirmCardSetup(clientSecret, {
+        payment_method: {
+          card: cardElement,
+          billing_details: {
+            name: cardholderName.trim() || undefined,
+          },
+        },
+      });
+
+      if (stripeError) {
+        setError(stripeError.message || 'Payment card confirmation failed.');
+        setSaving(false);
+        return;
+      }
+
+      if (!setupIntent?.payment_method) {
+        setError('Card setup could not be completed.');
+        setSaving(false);
+        return;
+      }
+
+      const pmId = typeof setupIntent.payment_method === 'string'
+        ? setupIntent.payment_method
+        : setupIntent.payment_method.id;
+
+      const res = await fetch('/api/billing/payment-method', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentMethodId: pmId }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || 'Failed to save card on server');
+        setSaving(false);
+        return;
+      }
+
+      onSuccess(json.card);
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred while saving your card');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-medium flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div>
+        <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">
+          Cardholder Name
+        </label>
+        <input
+          type="text"
+          value={cardholderName}
+          onChange={(e) => setCardholderName(e.target.value)}
+          placeholder="Name on card"
+          className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+        />
+      </div>
+
+      <div>
+        <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+          <span>Card Details *</span>
+          <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1">
+            <Lock className="w-3 h-3" /> PCI DSS Compliant (Stripe Elements)
+          </span>
+        </label>
+        <div className="border border-gray-200 bg-white rounded-xl p-3.5 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition">
+          <CardElement
+            options={{
+              style: {
+                base: {
+                  fontSize: '14px',
+                  color: '#111827',
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                  '::placeholder': {
+                    color: '#9ca3af',
+                  },
+                },
+                invalid: {
+                  color: '#ef4444',
+                },
+              },
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="pt-2 flex items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={saving}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={saving || !stripe}
+          icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+        >
+          {saving ? 'Saving Securely...' : 'Save Payment Method'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function PaymentMethodSection({ initialCard }: { initialCard?: any }) {
   const [card, setCard] = useState<any>(initialCard || null);
   const [loading, setLoading] = useState(!initialCard);
   const [showModal, setShowModal] = useState(false);
 
-  // Form State
-  const [cardNumber, setCardNumber] = useState('');
-  const [expMonth, setExpMonth] = useState('');
-  const [expYear, setExpYear] = useState('');
-  const [cvc, setCvc] = useState('');
-  const [cardholderName, setCardholderName] = useState('');
-  const [postalCode, setPostalCode] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  // Setup state
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [publishableKey, setPublishableKey] = useState<string | null>(
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || null
+  );
+  const [initializingSetup, setInitializingSetup] = useState(false);
+  const [setupError, setSetupError] = useState('');
+  const [hostedLoading, setHostedLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
   const fetchCard = async () => {
@@ -122,13 +280,6 @@ export function PaymentMethodSection({ initialCard }: { initialCard?: any }) {
     if (!initialCard) fetchCard();
   }, [initialCard]);
 
-  // Format card number with spaces (e.g. 4242 4242 4242 4242)
-  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/\D/g, '').slice(0, 16);
-    const parts = raw.match(/[\s\S]{1,4}/g) || [];
-    setCardNumber(parts.join(' '));
-  };
-
   // Card brand detection helper
   const getBrandIcon = (brandName?: string) => {
     const b = (brandName || '').toLowerCase();
@@ -139,50 +290,63 @@ export function PaymentMethodSection({ initialCard }: { initialCard?: any }) {
     return 'CARD';
   };
 
-  const handleSaveCard = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError('');
-    setSuccessMsg('');
-
+  const initSetupIntent = async () => {
+    setInitializingSetup(true);
+    setSetupError('');
     try {
-      const res = await fetch('/api/billing/payment-method', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cardNumber,
-          expMonth,
-          expYear,
-          cvc,
-          cardholderName,
-          postalCode,
-        }),
-      });
-
+      const res = await fetch('/api/billing/setup-intent', { method: 'POST' });
       const json = await res.json();
-
       if (!res.ok) {
-        setError(json.error || 'Failed to update payment method');
-        setSaving(false);
+        setSetupError(json.error || 'Failed to initialize payment setup');
         return;
       }
-
-      setCard(json.card);
-      setSuccessMsg('Payment method successfully saved!');
-      setTimeout(() => {
-        setShowModal(false);
-        setSuccessMsg('');
-        setCardNumber('');
-        setExpMonth('');
-        setExpYear('');
-        setCvc('');
-      }, 1200);
+      setClientSecret(json.clientSecret);
+      if (json.publishableKey) {
+        setPublishableKey(json.publishableKey);
+      }
     } catch (err: any) {
-      setError(err.message || 'Error updating card');
+      setSetupError(err.message || 'Error connecting to payment provider');
     } finally {
-      setSaving(false);
+      setInitializingSetup(false);
     }
   };
+
+  const handleOpenModal = () => {
+    setShowModal(true);
+    setSetupError('');
+    setSuccessMsg('');
+    initSetupIntent();
+  };
+
+  const handleHostedSetup = async () => {
+    setHostedLoading(true);
+    setSetupError('');
+    try {
+      const res = await fetch('/api/billing/create-setup-session', { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok || !json.url) {
+        setSetupError(json.error || 'Could not launch Stripe hosted setup');
+        setHostedLoading(false);
+        return;
+      }
+      window.location.href = json.url;
+    } catch (err: any) {
+      setSetupError(err.message || 'Error launching Stripe checkout');
+      setHostedLoading(false);
+    }
+  };
+
+  const handleCardSavedSuccess = (newCard: any) => {
+    setCard(newCard);
+    setSuccessMsg('Payment method securely saved and verified!');
+    setTimeout(() => {
+      setShowModal(false);
+      setSuccessMsg('');
+      setClientSecret(null);
+    }, 1500);
+  };
+
+  const stripePromise = getStripePromise(publishableKey);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
@@ -198,8 +362,8 @@ export function PaymentMethodSection({ initialCard }: { initialCard?: any }) {
         </div>
 
         <button
-          onClick={() => { setShowModal(true); setError(''); }}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs rounded-xl transition border border-blue-200 self-start sm:self-auto"
+          onClick={handleOpenModal}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs rounded-xl transition border border-blue-200 self-start sm:self-auto cursor-pointer"
         >
           <CreditCard className="w-4 h-4" />
           {card ? 'Change Payment Method' : 'Add Credit Card'}
@@ -244,12 +408,12 @@ export function PaymentMethodSection({ initialCard }: { initialCard?: any }) {
           <CreditCard className="w-8 h-8 text-gray-300 mx-auto" />
           <p className="text-[13px] font-semibold text-gray-700">No credit card on file</p>
           <p className="text-[12px] text-gray-400 max-w-sm mx-auto">
-            Add a credit card directly here to ensure uninterrupted notification delivery and access to additional endpoints.
+            Add a credit card securely here to ensure uninterrupted notification delivery and access to additional endpoints.
           </p>
         </div>
       )}
 
-      {/* In-App Update Card Modal */}
+      {/* PCI DSS Compliant Stripe Elements Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 relative space-y-4">
@@ -260,145 +424,91 @@ export function PaymentMethodSection({ initialCard }: { initialCard?: any }) {
                 </div>
                 <div>
                   <h3 className="font-bold text-[16px] text-gray-900">Payment Information</h3>
-                  <p className="text-[11px] text-gray-400">Card details are securely encrypted and saved</p>
+                  <p className="text-[11px] text-gray-400">Card details are securely encrypted by Stripe</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg transition"
+                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {error && (
+            {setupError && (
               <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-medium flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                {error}
+                <span>{setupError}</span>
               </div>
             )}
 
             {successMsg && (
               <div className="p-3 bg-green-50 border border-green-200 text-green-800 text-xs rounded-xl font-medium flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-green-600" />
-                {successMsg}
+                <span>{successMsg}</span>
               </div>
             )}
 
-            <form onSubmit={handleSaveCard} className="space-y-3.5">
-              <div>
-                <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                  Cardholder Name *
-                </label>
-                <input
-                  required
-                  value={cardholderName}
-                  onChange={(e) => setCardholderName(e.target.value)}
-                  placeholder="Mauricio Arias"
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                />
+            {initializingSetup ? (
+              <div className="py-12 flex flex-col items-center justify-center space-y-3">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                <p className="text-[13px] text-gray-500 font-medium">Connecting securely to Stripe...</p>
               </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                  Card Number *
-                </label>
-                <div className="relative">
-                  <input
-                    required
-                    type="text"
-                    value={cardNumber}
-                    onChange={handleCardNumberChange}
-                    placeholder="4242 4242 4242 4242"
-                    maxLength={19}
-                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 font-mono text-[13px] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+            ) : clientSecret && publishableKey && stripePromise ? (
+              <div className="space-y-4">
+                <Elements stripe={stripePromise}>
+                  <StripeCardForm
+                    clientSecret={clientSecret}
+                    onSuccess={handleCardSavedSuccess}
+                    onCancel={() => setShowModal(false)}
                   />
-                  <div className="absolute right-3 top-2.5 text-gray-400 font-bold text-[11px]">
-                    {getBrandIcon(cardNumber)}
+                </Elements>
+
+                <div className="border-t border-gray-100 pt-3 text-center">
+                  <button
+                    type="button"
+                    onClick={handleHostedSetup}
+                    disabled={hostedLoading}
+                    className="text-[12px] text-gray-500 hover:text-blue-600 inline-flex items-center gap-1 transition cursor-pointer"
+                  >
+                    {hostedLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
+                    Or update on Stripe Hosted Checkout →
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 py-2">
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 text-[13px] space-y-2">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <Shield className="w-4 h-4 text-blue-600" />
+                    <span>Secure Stripe Hosted Setup</span>
                   </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2.5">
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                    Month *
-                  </label>
-                  <input
-                    required
-                    type="number"
-                    min={1}
-                    max={12}
-                    value={expMonth}
-                    onChange={(e) => setExpMonth(e.target.value)}
-                    placeholder="MM (e.g. 09)"
-                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition text-center"
-                  />
+                  <p className="text-[12px] text-blue-800 leading-relaxed">
+                    Update your payment method directly on Stripe&apos;s secure, PCI-compliant hosted page. Your card will be attached to your workspace subscription automatically.
+                  </p>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                    Year *
-                  </label>
-                  <input
-                    required
-                    type="number"
-                    min={2026}
-                    max={2040}
-                    value={expYear}
-                    onChange={(e) => setExpYear(e.target.value)}
-                    placeholder="YYYY (2028)"
-                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition text-center"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                    CVC *
-                  </label>
-                  <input
-                    required
-                    type="password"
-                    maxLength={4}
-                    value={cvc}
-                    onChange={(e) => setCvc(e.target.value)}
-                    placeholder="CVC"
-                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 font-mono text-[13px] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition text-center"
-                  />
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowModal(false)}
+                    disabled={hostedLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={handleHostedSetup}
+                    disabled={hostedLoading}
+                    icon={hostedLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                  >
+                    {hostedLoading ? 'Redirecting to Stripe...' : 'Open Stripe Hosted Checkout →'}
+                  </Button>
                 </div>
               </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                  Billing ZIP / Postal Code
-                </label>
-                <input
-                  value={postalCode}
-                  onChange={(e) => setPostalCode(e.target.value)}
-                  placeholder="33134"
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                />
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowModal(false)}
-                  disabled={saving}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={saving}
-                  icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-                >
-                  {saving ? 'Saving Card...' : 'Save Payment Method'}
-                </Button>
-              </div>
-            </form>
+            )}
           </div>
         </div>
       )}
