@@ -20,18 +20,19 @@ import {
   PaymentMethodSection,
   ChargeHistorySection,
 } from './PlanManager';
+import BillingViewTabs from './BillingViewTabs';
 
 export const metadata = { title: 'Billing & Site Pricing Plans | Liable Alerts' };
 
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; session_id?: string; setup_success?: string }>;
+  searchParams: Promise<{ status?: string; session_id?: string; setup_success?: string; tab?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/login');
 
-  const { status, session_id, setup_success } = await searchParams;
+  const { status, session_id, setup_success, tab } = await searchParams;
 
   const supabase = getAdminClient();
   const { data: membership } = await supabase
@@ -312,129 +313,134 @@ export default async function BillingPage({
         );
       })()}
 
-      {/* 1. Current Subscription & Quota Summary Card */}
-      <Card className="border-signal-blue/20 bg-signal-blue/5 shadow-subtle">
-        <CardContent className="p-5 sm:p-7">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-signal-blue rounded-full flex items-center justify-center shadow-subtle-5 flex-shrink-0">
-                  <Building className="w-5 h-5 text-white" />
-                </div>
+      {/* Interactive Billing View Tabs (Eliminates excessive scrolling & organizes sections) */}
+      <BillingViewTabs
+        initialTab={(tab as any) || (setup_success === 'true' ? 'payment-method' : 'plans')}
+        cardLast4={subscription?.cardLast4 || null}
+        cardBrand={subscription?.cardBrand || null}
+        planName={usage.isTrial ? 'Free Trial' : subscription?.plan?.name || 'Starter'}
+        extraEndpoints={usage.extraEndpoints || 0}
+        currentPlanSection={
+          <Card className="border-signal-blue/20 bg-signal-blue/5 shadow-subtle">
+            <CardContent className="p-5 sm:p-7">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
                 <div>
-                  <p className="text-[12px] font-medium text-smoke uppercase tracking-wider">Current Subscription Plan</p>
-                  <h2 className="text-xl sm:text-[24px] font-bold text-ink-black tracking-[-0.48px] leading-tight">
-                    {usage.isTrial ? 'Seven-Day Free Trial' : `${subscription?.plan?.name || 'Starter'} Plan`}
-                  </h2>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 bg-signal-blue rounded-full flex items-center justify-center shadow-subtle-5 flex-shrink-0">
+                      <Building className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-[12px] font-medium text-smoke uppercase tracking-wider">Current Subscription Plan</p>
+                      <h2 className="text-xl sm:text-[24px] font-bold text-ink-black tracking-[-0.48px] leading-tight">
+                        {usage.isTrial ? 'Seven-Day Free Trial' : `${subscription?.plan?.name || 'Starter'} Plan`}
+                      </h2>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <span className="text-xs font-bold text-blue-900 bg-blue-100/70 px-2.5 py-1 rounded-lg">
+                      {usage.activeSitesQuota} Active Site Quota
+                    </span>
+                    {usage.extraEndpoints > 0 && (
+                      <span className="text-xs font-bold text-indigo-900 bg-indigo-100/70 px-2.5 py-1 rounded-lg">
+                        +{usage.extraEndpoints} Additional Endpoints ($15/mo each)
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="self-start sm:self-auto">
+                  <Badge variant={
+                    subscription?.status === 'ACTIVE' ? 'success' :
+                    subscription?.status === 'TRIALING' ? 'warning' :
+                    'danger'
+                  }>
+                    {subscription?.status ?? 'ACTIVE'}
+                  </Badge>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                <span className="text-xs font-bold text-blue-900 bg-blue-100/70 px-2.5 py-1 rounded-lg">
-                  {usage.activeSitesQuota} Active Site Quota
-                </span>
-                {usage.extraEndpoints > 0 && (
-                  <span className="text-xs font-bold text-indigo-900 bg-indigo-100/70 px-2.5 py-1 rounded-lg">
-                    +{usage.extraEndpoints} Additional Endpoints ($15/mo each)
-                  </span>
-                )}
-              </div>
-            </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 border-t border-ash-mist/30">
+                {/* Sites Metric */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-medium text-gray-500">
+                    <span>Active Physical Sites</span>
+                    <span className="font-bold text-gray-900">{usage.activeSitesCount} / {usage.activeSitesQuota}</span>
+                  </div>
+                  <div className="w-full bg-ash-mist/80 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-signal-blue transition-all"
+                      style={{ width: `${Math.min(100, (usage.activeSitesCount / Math.max(1, usage.activeSitesQuota)) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    Each active site includes 1 primary alarm endpoint
+                  </p>
+                </div>
 
-            <div className="self-start sm:self-auto">
-              <Badge variant={
-                subscription?.status === 'ACTIVE' ? 'success' :
-                subscription?.status === 'TRIALING' ? 'warning' :
-                'danger'
-              }>
-                {subscription?.status ?? 'ACTIVE'}
-              </Badge>
-            </div>
-          </div>
+                {/* Endpoints Metric */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-medium text-gray-500">
+                    <span>Active Email Accounts</span>
+                    <span className="font-bold text-gray-900">{usage.activeCount} / {usage.maxActiveEndpoints}</span>
+                  </div>
+                  <div className="w-full bg-ash-mist/80 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${usage.isOverLimit ? 'bg-red-600' : 'bg-signal-blue'}`}
+                      style={{ width: `${endpointUsagePct}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    {usage.activeSitesQuota} primary + {usage.extraEndpoints} extra ($15/mo each)
+                  </p>
+                </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 border-t border-ash-mist/30">
-            {/* Sites Metric */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs font-medium text-gray-500">
-                <span>Active Physical Sites</span>
-                <span className="font-bold text-gray-900">{usage.activeSitesCount} / {usage.activeSitesQuota}</span>
+                {/* SMS Credits Metric */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-medium text-gray-500">
+                    <span>SMS Credits (Monthly)</span>
+                    <span className="font-bold text-gray-900">{usage.totalCreditsUsed} / {usage.includedCredits}</span>
+                  </div>
+                  <div className="w-full bg-ash-mist/80 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${smsUsagePct >= 100 ? 'bg-red-600' : smsUsagePct >= 80 ? 'bg-amber-500' : 'bg-green-600'}`}
+                      style={{ width: `${smsUsagePct}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    {usage.isTrial ? '25 credits for free trial' : '250 credits included per endpoint'}
+                  </p>
+                </div>
               </div>
-              <div className="w-full bg-ash-mist/80 rounded-full h-2.5 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-signal-blue transition-all"
-                  style={{ width: `${Math.min(100, (usage.activeSitesCount / Math.max(1, usage.activeSitesQuota)) * 100)}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-gray-400">
-                Each active site includes 1 primary alarm endpoint
-              </p>
-            </div>
-
-            {/* Endpoints Metric */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs font-medium text-gray-500">
-                <span>Active Email Accounts</span>
-                <span className="font-bold text-gray-900">{usage.activeCount} / {usage.maxActiveEndpoints}</span>
-              </div>
-              <div className="w-full bg-ash-mist/80 rounded-full h-2.5 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${usage.isOverLimit ? 'bg-red-600' : 'bg-signal-blue'}`}
-                  style={{ width: `${endpointUsagePct}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-gray-400">
-                {usage.activeSitesQuota} primary + {usage.extraEndpoints} extra ($15/mo each)
-              </p>
-            </div>
-
-            {/* SMS Credits Metric */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs font-medium text-gray-500">
-                <span>SMS Credits (Monthly)</span>
-                <span className="font-bold text-gray-900">{usage.totalCreditsUsed} / {usage.includedCredits}</span>
-              </div>
-              <div className="w-full bg-ash-mist/80 rounded-full h-2.5 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${smsUsagePct >= 100 ? 'bg-red-600' : smsUsagePct >= 80 ? 'bg-amber-500' : 'bg-green-600'}`}
-                  style={{ width: `${smsUsagePct}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-gray-400">
-                {usage.isTrial ? '25 credits for free trial' : '250 credits included per endpoint'}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 2. Interactive Site Pricing Calculator & Tier Selector */}
-      <SitePricingCalculator
-        currentActiveSites={usage.activeSitesCount}
-        currentSubscribedSites={usage.activeSitesQuota}
-        currentPlanCode={subscription?.plan?.code}
-        isTrial={usage.isTrial}
+            </CardContent>
+          </Card>
+        }
+        pricingCalculatorSection={
+          <SitePricingCalculator
+            currentActiveSites={usage.activeSitesCount}
+            currentSubscribedSites={usage.activeSitesQuota}
+            currentPlanCode={subscription?.plan?.code}
+            isTrial={usage.isTrial}
+          />
+        }
+        additionalEndpointsSection={
+          <AdditionalEndpointsManager
+            initialExtra={usage.extraEndpoints}
+            basePlanMax={usage.activeSitesQuota}
+            planName={subscription?.plan?.name || 'Site'}
+          />
+        }
+        smsUsageSection={
+          <SmsUsageOverview
+            includedCredits={usage.includedCredits}
+            totalCreditsUsed={usage.totalCreditsUsed}
+            endpoints={usage.activeEndpoints}
+            isTrial={usage.isTrial}
+          />
+        }
+        paymentMethodSection={<PaymentMethodSection initialCard={initialCard} />}
+        invoicesSection={<ChargeHistorySection />}
       />
-
-      {/* 3. Additional Endpoints Manager ($15/mo per endpoint at same site) */}
-      <AdditionalEndpointsManager
-        initialExtra={usage.extraEndpoints}
-        basePlanMax={usage.activeSitesQuota}
-        planName={subscription?.plan?.name || 'Site'}
-      />
-
-      {/* 4. SMS Delivery Credits & Automatic Overage Management */}
-      <SmsUsageOverview
-        includedCredits={usage.includedCredits}
-        totalCreditsUsed={usage.totalCreditsUsed}
-        endpoints={usage.activeEndpoints}
-        isTrial={usage.isTrial}
-      />
-
-      {/* 5. In-App Payment Method (Credit Card on File) */}
-      <PaymentMethodSection initialCard={initialCard} />
-
-      {/* 6. In-App Billing & Charge History Record */}
-      <ChargeHistorySection />
     </div>
   );
 }

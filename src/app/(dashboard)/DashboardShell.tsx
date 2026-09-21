@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Zap, Menu, X, Mail, ShieldCheck, Building2, Eye, ArrowLeft } from 'lucide-react';
+import { Zap, Menu, X, Mail, ShieldCheck, Building2, Eye, ArrowLeft, CreditCard } from 'lucide-react';
 import { MainSidebarNav, SettingsSidebarNav, AdminSidebarNav } from './SidebarNav';
 import SignOutButton from '@/components/SignOutButton';
 import PageTransition from '@/components/PageTransition';
@@ -191,13 +191,24 @@ export default function DashboardShell({
                   <ArrowLeft className="w-3 h-3" /> Return to Superadmin HQ
                 </button>
               ) : (
-                <Link
-                  href="/billing"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold mt-2.5 inline-flex items-center gap-1"
-                >
-                  Manage Plan →
-                </Link>
+                <div className="mt-2.5 pt-2 border-t border-blue-200/50 flex items-center justify-between text-[11px]">
+                  <Link
+                    href="/billing?tab=plans"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="text-blue-600 hover:text-blue-700 font-semibold inline-flex items-center gap-1 transition cursor-pointer"
+                  >
+                    Manage Plan →
+                  </Link>
+                  <Link
+                    href="/billing?tab=payment-method"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="text-gray-600 hover:text-blue-700 font-medium inline-flex items-center gap-1 transition bg-white/80 hover:bg-white px-2 py-0.5 rounded-md border border-blue-100 shadow-2xs cursor-pointer"
+                    title="View saved payment card"
+                  >
+                    <CreditCard className="w-3 h-3 text-blue-500" />
+                    <span>{subscription.cardLast4 ? `•••• ${subscription.cardLast4}` : 'Add Card'}</span>
+                  </Link>
+                </div>
               )}
             </div>
           </div>
