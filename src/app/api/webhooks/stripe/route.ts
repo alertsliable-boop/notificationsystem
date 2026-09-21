@@ -32,6 +32,65 @@ export async function POST(req: Request) {
       const extraEndpoints = parseInt(session.metadata?.extraEndpoints || '0', 10) || 0;
       const stripeCustomerId = session.customer;
 
+      // Handle card setup mode (only updates payment method details, preserves plan)
+      if (session.mode === 'setup') {
+        if (companyId && stripeCustomerId) {
+          try {
+            const pms = await stripe.paymentMethods.list({
+              customer: stripeCustomerId,
+              type: 'card',
+              limit: 1,
+            });
+            if (pms.data.length > 0) {
+              const pm = pms.data[0];
+              const c = pm.card;
+              const brand = c?.brand ? c.brand.charAt(0).toUpperCase() + c.brand.slice(1) : 'Card';
+              const last4 = c?.last4 || null;
+              const expMonth = c?.exp_month || null;
+              const expYear = c?.exp_year || null;
+              const billingEmail = pm.billing_details?.email || session.customer_details?.email || null;
+
+              await stripe.customers.update(stripeCustomerId, {
+                invoice_settings: { default_payment_method: pm.id },
+              });
+
+              const { data: existingSub } = await supabase
+                .from('CompanySubscription')
+                .select('id, stripeSubscriptionId')
+                .eq('companyId', companyId)
+                .single();
+
+              if (existingSub?.stripeSubscriptionId && existingSub.stripeSubscriptionId.startsWith('sub_')) {
+                try {
+                  await stripe.subscriptions.update(existingSub.stripeSubscriptionId, {
+                    default_payment_method: pm.id,
+                  });
+                } catch (subPmErr) {
+                  console.warn('[STRIPE WEBHOOK] Failed to update subscription default payment method:', subPmErr);
+                }
+              }
+
+              if (existingSub) {
+                await supabase
+                  .from('CompanySubscription')
+                  .update({
+                    stripeCustomerId,
+                    cardBrand: brand,
+                    cardLast4: last4,
+                    cardExpMonth: expMonth,
+                    cardExpYear: expYear,
+                    billingEmail,
+                  })
+                  .eq('id', existingSub.id);
+              }
+            }
+          } catch (err: any) {
+            console.error('[STRIPE WEBHOOK] Setup session completed handler error:', err.message);
+          }
+        }
+        break;
+      }
+
       if (companyId) {
         // Map planCode based on activeSites if needed
         let targetCode = planCode || 'site_starter';

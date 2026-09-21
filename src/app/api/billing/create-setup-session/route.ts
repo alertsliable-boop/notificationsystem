@@ -68,11 +68,19 @@ export async function POST(req: Request) {
         companyId: ctx.companyId,
         userId: ctx.userId,
       },
+      ...({
+        managed_payments: {
+          enabled: false,
+        },
+      } as any),
     });
 
     return NextResponse.json({ url: session.url });
   } catch (err: any) {
     console.error('[Stripe Create Setup Session Error]', err);
-    return NextResponse.json({ error: err.message || 'Failed to create setup session' }, { status: 500 });
+    return NextResponse.json({
+      error: 'We couldn’t open the secure payment page. Please try again or contact support.',
+      technicalDetails: process.env.NODE_ENV === 'development' ? err.message : undefined,
+    }, { status: 500 });
   }
 }
