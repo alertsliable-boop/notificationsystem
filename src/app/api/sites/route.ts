@@ -84,6 +84,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Free trial includes 1 active site. Please subscribe to add more sites.', code: 'TRIAL_LIMIT_EXCEEDED' }, { status: 403 });
     }
 
+    if (!usage.isTrial && usage.activeSitesCount >= usage.activeSitesQuota) {
+      return NextResponse.json({ error: `Site quota exceeded. You have purchased capacity for ${usage.activeSitesQuota} site(s). Please upgrade your plan in Billing to add more sites.`, code: 'QUOTA_EXCEEDED' }, { status: 403 });
+    }
+
     // Verify customer belongs to this company
     const { data: customer } = await supabase
       .from('Customer')
@@ -104,31 +108,7 @@ export async function POST(req: Request) {
 
     if (!site) throw new Error('Failed to create site');
 
-    // Update activeSites count in CompanySubscription
     const newSiteCount = (usage.activeSitesCount || 0) + 1;
-    await supabase
-      .from('CompanySubscription')
-      .update({ activeSites: newSiteCount })
-      .eq('companyId', ctx.companyId);
-
-    // Sync quantity with active Stripe subscription if present
-    const { stripe, isStripeConfigured } = await import('@/lib/stripe');
-    if (usage.subscription?.stripeSubscriptionId && !usage.subscription.stripeSubscriptionId.startsWith('mock_') && isStripeConfigured()) {
-      try {
-        const stripeSub = await stripe.subscriptions.retrieve(usage.subscription.stripeSubscriptionId);
-        const sitePriceId = process.env.NEXT_PUBLIC_STRIPE_SITE_PRICE_ID || 'price_1UGi0d33lejKAXgDiGPnXQXW';
-        const siteItem = stripeSub.items.data.find((it: any) => it.price.id === sitePriceId);
-        if (siteItem) {
-          await stripe.subscriptionItems.update(siteItem.id, {
-            quantity: newSiteCount,
-            proration_behavior: 'always_invoice',
-          });
-        }
-      } catch (stripeErr: any) {
-        console.warn('Could not sync Stripe quantity on site creation:', stripeErr.message);
-      }
-    }
-
     await auditLog(ctx, 'CREATE_SITE', 'Site', site.id, { name, customerId, newSiteCount });
 
     return NextResponse.json({ data: site }, { status: 201 });
