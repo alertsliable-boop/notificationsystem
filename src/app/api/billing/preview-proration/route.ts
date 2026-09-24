@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     let existingExtraItem = null;
 
     for (const item of stripeSub.items.data) {
-      if (item.price.id === sitePriceId || item.price.recurring?.tiers_mode === 'volume') {
+      if (item.price.id === sitePriceId || (item.price.recurring as any)?.tiers_mode === 'volume') {
         existingSiteItem = item;
       } else if (item.price.id === extraPriceId) {
         existingExtraItem = item;
