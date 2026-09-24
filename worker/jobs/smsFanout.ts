@@ -99,6 +99,48 @@ export async function processSmsFanout(job: Job) {
   const { calculateSmsSegments } = await import('@/lib/phone');
   const segments = calculateSmsSegments(body);
 
+  const totalSegments = activeRecipients.length * segments;
+
+  try {
+    const { getSubscriptionUsage } = await import('@/services/endpointService');
+    const usage = await getSubscriptionUsage(endpoint.companyId);
+    
+    if (!usage.isTrial) {
+      const epUsedCredits = usage.endpointCreditMap?.get(endpoint.id) || 0;
+      const smsOption = endpoint.smsUsageOption || 'AUTO_OVERAGE';
+      const newUsedCredits = epUsedCredits + totalSegments;
+      
+      const includedLimit = 250;
+      const currentOverageBlocks = Math.max(0, Math.ceil((epUsedCredits - includedLimit) / 250));
+      const newOverageBlocks = Math.max(0, Math.ceil((newUsedCredits - includedLimit) / 250));
+      const blocksToCharge = newOverageBlocks - currentOverageBlocks;
+
+      if (smsOption === 'AUTO_OVERAGE' && blocksToCharge > 0 && usage.subscription?.stripeCustomerId) {
+        const { stripe } = await import('@/lib/stripe');
+        
+        await stripe.invoiceItems.create({
+          customer: usage.subscription.stripeCustomerId,
+          amount: blocksToCharge * 1000,
+          currency: 'usd',
+          description: `Automatic SMS Overage (${blocksToCharge * 250} credits) for endpoint ${endpoint.localPart}`,
+        });
+        
+        const invoice = await stripe.invoices.create({
+          customer: usage.subscription.stripeCustomerId,
+          auto_advance: true,
+          description: 'Automatic SMS Overage Charge',
+        });
+        
+        // Attempt immediate payment
+        await stripe.invoices.pay(invoice.id).catch(err => {
+          console.warn(`Failed to auto-pay overage invoice ${invoice.id}:`, err.message);
+        });
+      }
+    }
+  } catch (err: any) {
+    console.error('Error processing overage billing in smsFanout:', err);
+  }
+
   const sendPromises = activeRecipients.map(async (er: any) => {
     const phoneRecipient = er.recipient;
 

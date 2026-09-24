@@ -68,7 +68,7 @@ export async function POST(req: Request) {
           if (existingItem) {
             await stripe.subscriptionItems.update(existingItem.id, {
               quantity: newExtra,
-              proration_behavior: 'always_invoice',
+              proration_behavior: addedQty > 0 ? 'always_invoice' : 'none',
             });
           } else {
             await stripe.subscriptionItems.create({
@@ -81,7 +81,7 @@ export async function POST(req: Request) {
         } else if (existingItem) {
           // Extra count set to 0, delete item
           await stripe.subscriptionItems.del(existingItem.id, {
-            proration_behavior: 'always_invoice',
+            proration_behavior: 'none',
           });
         }
       } catch (stripeErr: any) {
@@ -131,24 +131,6 @@ export async function POST(req: Request) {
       .from('CompanySubscription')
       .update({ extraEndpoints: newExtra })
       .eq('id', sub.id);
-
-    // Record invoice in BillingInvoice if quantity increased
-    if (addedQty > 0) {
-      await supabase
-        .from('BillingInvoice')
-        .insert({
-          id: nanoid(),
-          companyId: ctx.companyId,
-          invoiceNumber: `INV-EP-${nanoid(6).toUpperCase()}`,
-          amountCents: addedQty * 1500,
-          currency: 'usd',
-          status: 'paid',
-          description: `${addedQty} Additional Email Endpoint${addedQty > 1 ? 's' : ''} ($15.00/mo each)`,
-          cardBrand: sub.cardBrand || 'Card',
-          cardLast4: sub.cardLast4 || '••••',
-          createdAt: new Date().toISOString(),
-        });
-    }
 
     const baseSites = Math.max(1, sub.activeSites || 1);
     const totalMax = baseSites + newExtra;

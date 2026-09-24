@@ -571,14 +571,29 @@ export function AdditionalEndpointsManager({
   const [loadingPayment, setLoadingPayment] = useState(false);
   const [confirmError, setConfirmError] = useState('');
 
+  const [prorationData, setProrationData] = useState<any>(null);
+
   const handleOpenConfirmModal = async () => {
     setShowConfirmModal(true);
     setLoadingPayment(true);
     setConfirmError('');
+    setProrationData(null);
     try {
       const res = await fetch('/api/billing/payment-method');
       const json = await res.json();
       setPaymentInfo(json);
+
+      if (selectedCount > extraCount) {
+        const previewRes = await fetch('/api/billing/preview-proration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newExtraEndpointsCount: selectedCount }),
+        });
+        const previewJson = await previewRes.json();
+        if (previewRes.ok) {
+          setProrationData(previewJson);
+        }
+      }
     } catch (err) {
       console.error('Failed to load payment info:', err);
     } finally {
@@ -765,6 +780,14 @@ export function AdditionalEndpointsManager({
                   <span className="text-xs font-bold text-gray-900">New Monthly Cost:</span>
                   <span className="text-sm font-bold text-blue-700">+${monthlyCost.toFixed(2)}/mo</span>
                 </div>
+                {selectedCount > extraCount && (
+                  <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
+                    <span className="text-xs font-bold text-gray-900">Due Today (Prorated):</span>
+                    <span className="text-sm font-bold text-green-700">
+                      {prorationData ? `$${(prorationData.amountDueTodayCents / 100).toFixed(2)}` : '...'}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Proration Explanation */}
@@ -775,9 +798,9 @@ export function AdditionalEndpointsManager({
                 </p>
                 <p className="text-[11.5px] leading-relaxed text-blue-800">
                   {selectedCount > extraCount ? (
-                    <>You will be charged a <strong>prorated amount immediately</strong> for the remainder of your current monthly billing period. Subsequent renewals will bill the full updated rate (${monthlyCost.toFixed(2)}/mo).</>
+                    <>You are charged a <strong>prorated amount today</strong> for the remainder of your current billing period. Future renewals will bill the full rate.</>
                   ) : (
-                    <>Unused days for removed endpoints will be <strong>credited to your account balance</strong> and automatically deducted from your next monthly renewal bill.</>
+                    <>Changes take effect at the next renewal date. No prorated credits are issued for unused days in the current period.</>
                   )}
                 </p>
               </div>
@@ -971,6 +994,11 @@ export function SitePricingCalculator({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [prorationData, setProrationData] = useState<any>(null);
+  const [loadingPayment, setLoadingPayment] = useState(false);
+  
   const router = useRouter();
 
   const getTierInfo = (sites: number) => {
@@ -992,34 +1020,86 @@ export function SitePricingCalculator({
   ];
 
   const handleSubscribe = async () => {
-    setLoading(true);
-    setError('');
+    if (isTrial) {
+      // For trial users, redirect to checkout
+      setLoading(true);
+      setError('');
+      try {
+        const res = await fetch('/api/billing/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            planCode: currentTier.code,
+            activeSites: siteCount,
+          }),
+        });
 
+        const json = await res.json();
+        if (!res.ok) {
+          setError(json.error || 'Failed to initialize subscription checkout');
+          setLoading(false);
+          return;
+        }
+
+        if (json.url) {
+          window.location.href = json.url;
+        } else {
+          router.refresh();
+          setLoading(false);
+        }
+      } catch (err: any) {
+        setError(err.message || 'Error processing request');
+        setLoading(false);
+      }
+    } else {
+      // For existing subscribers, fetch proration preview and show confirm modal
+      setShowConfirmModal(true);
+      setLoadingPayment(true);
+      setError('');
+      setProrationData(null);
+      try {
+        const previewRes = await fetch('/api/billing/preview-proration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newSitesCount: siteCount }),
+        });
+        const previewJson = await previewRes.json();
+        if (previewRes.ok) {
+          setProrationData(previewJson);
+        } else {
+          setError(previewJson.error || 'Failed to preview proration');
+        }
+      } catch (err) {
+        console.error('Failed to load proration preview:', err);
+      } finally {
+        setLoadingPayment(false);
+      }
+    }
+  };
+
+  const handleConfirmSwitchPlan = async () => {
+    setLoading(true);
+    setShowConfirmModal(false);
     try {
-      const res = await fetch('/api/billing/create-checkout-session', {
+      const res = await fetch('/api/billing/switch-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planCode: currentTier.code,
-          activeSites: siteCount,
-        }),
+        body: JSON.stringify({ planCode: currentTier.code, activeSites: siteCount }),
       });
-
       const json = await res.json();
       if (!res.ok) {
-        setError(json.error || 'Failed to initialize subscription checkout');
+        alert(json.error || 'Failed to update subscription plan');
         setLoading(false);
         return;
       }
-
       if (json.url) {
         window.location.href = json.url;
-      } else {
-        router.refresh();
-        setLoading(false);
+        return;
       }
+      router.refresh();
+      window.location.href = '/billing?status=updated';
     } catch (err: any) {
-      setError(err.message || 'Error processing request');
+      alert(err.message || 'An error occurred while switching plans');
       setLoading(false);
     }
   };
@@ -1222,6 +1302,96 @@ export function SitePricingCalculator({
           </span>
         </div>
       </div>
+      
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <Portal>
+          <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !loading) setShowConfirmModal(false);
+            }}
+          >
+            <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative space-y-4 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                    <CreditCard className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-[17px] text-gray-900">Confirm Subscription Change</h3>
+                    <p className="text-xs text-gray-500">Review charge details and billing proration</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmModal(false)}
+                  className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Summary Box */}
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-500 font-medium">New Plan Tier:</span>
+                  <span className="font-bold text-gray-900">{currentTier.name} ({siteCount} sites)</span>
+                </div>
+                <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
+                  <span className="text-xs font-bold text-gray-900">New Monthly Cost:</span>
+                  <span className="text-sm font-bold text-blue-700">${monthlyTotal.toFixed(2)}/mo</span>
+                </div>
+                
+                {siteCount > Math.max(1, currentSubscribedSites || 1) && (
+                  <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
+                    <span className="text-xs font-bold text-gray-900">Due Today (Prorated):</span>
+                    <span className="text-sm font-bold text-green-700">
+                      {loadingPayment ? '...' : prorationData ? `$${(prorationData.amountDueTodayCents / 100).toFixed(2)}` : '...'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Proration Explanation */}
+              <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-900 space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                  How Stripe Billing &amp; Proration Works:
+                </p>
+                <p className="text-[11.5px] leading-relaxed text-blue-800">
+                  {siteCount > Math.max(1, currentSubscribedSites || 1) ? (
+                    <>You are charged a <strong>prorated amount today</strong> for the remainder of your current billing period. Future renewals will bill the full rate.</>
+                  ) : (
+                    <>Changes take effect at the next renewal date. No prorated credits are issued for unused days in the current period.</>
+                  )}
+                </p>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmModal(false)}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmSwitchPlan}
+                  disabled={loading || loadingPayment}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  Confirm Change
+                </button>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { nanoid } from 'nanoid';
 
 const schema = z.object({
   planCode: z.string(),
+  activeSites: z.number().int().positive().optional(),
   deactivateEndpointIds: z.array(z.string()).optional(),
 });
 
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { planCode, deactivateEndpointIds = [] } = schema.parse(body);
+    const { planCode, activeSites: inputActiveSites, deactivateEndpointIds = [] } = schema.parse(body);
 
     if (planCode === 'superadmin_owner' || planCode === 'free_trial') {
       return NextResponse.json({ error: 'This plan is not available for direct subscription.' }, { status: 400 });
@@ -73,7 +74,8 @@ export async function POST(req: Request) {
       extraEndpoints = Math.max(extraEndpoints, currentActiveCount - baseMax);
     }
 
-    const isUpgrade = newPlan.priceCents > (currentSub?.plan?.priceCents || 0);
+    const newActiveSites = inputActiveSites ?? Math.max(1, currentSub?.activeSites || 1);
+    const isUpgrade = newPlan.priceCents > (currentSub?.plan?.priceCents || 0) || newActiveSites > (currentSub?.activeSites || 1);
 
     // If company already has an active, paying Stripe subscription, update it directly via Stripe API
     let updatedViaStripe = false;
@@ -85,7 +87,7 @@ export async function POST(req: Request) {
           const subItemId = stripeSub.items.data[0].id;
 
           await stripe.subscriptions.update(stripeSub.id, {
-            items: [{ id: subItemId, price: newPlan.stripePriceId || undefined }],
+            items: [{ id: subItemId, price: newPlan.stripePriceId || undefined, quantity: newActiveSites }],
             proration_behavior: isUpgrade ? 'always_invoice' : 'none',
             metadata: {
               planCode: newPlan.code,
@@ -107,6 +109,7 @@ export async function POST(req: Request) {
           .from('CompanySubscription')
           .update({
             planId: newPlan.id,
+            activeSites: newActiveSites,
             extraEndpoints,
             status: 'ACTIVE',
           })
@@ -115,21 +118,6 @@ export async function POST(req: Request) {
           .single();
         updatedSub = data;
       }
-
-      await supabase
-        .from('BillingInvoice')
-        .insert({
-          id: nanoid(),
-          companyId: ctx.companyId,
-          invoiceNumber: `INV-SUB-${nanoid(6).toUpperCase()}`,
-          amountCents: newPlan.priceCents + (extraEndpoints * 1200),
-          currency: 'usd',
-          status: 'paid',
-          description: `Plan Switch to ${newPlan.name} Plan (${baseMax} endpoints)${extraEndpoints > 0 ? ` + ${extraEndpoints} Extra Endpoint(s)` : ''}`,
-          cardBrand: currentSub?.cardBrand || 'Card',
-          cardLast4: currentSub?.cardLast4 || '••••',
-          createdAt: new Date().toISOString(),
-        });
 
       await auditLog(ctx, 'SWITCH_PLAN', 'CompanySubscription', currentSub?.id || ctx.companyId, {
         previousPlan: currentSub?.plan?.code,
@@ -154,9 +142,9 @@ export async function POST(req: Request) {
 
         const defaultPm = customer?.invoice_settings?.default_payment_method;
         if (defaultPm) {
-          const directLineItems: any[] = [{ price: newPlan.stripePriceId, quantity: 1 }];
+          const directLineItems: any[] = [{ price: newPlan.stripePriceId, quantity: newActiveSites }];
           if (extraEndpoints > 0) {
-            directLineItems.push({ price: 'price_1UDETs33lejKAXgD3TMm7qgK', quantity: extraEndpoints });
+            directLineItems.push({ price: process.env.STRIPE_EXTRA_ENDPOINT_PRICE_ID || 'price_1UGi0d33lejKAXgDsWnNcIH4', quantity: extraEndpoints });
           }
 
           const newStripeSub = await stripe.subscriptions.create({
@@ -177,6 +165,7 @@ export async function POST(req: Request) {
               .from('CompanySubscription')
               .update({
                 planId: newPlan.id,
+                activeSites: newActiveSites,
                 extraEndpoints,
                 status: 'ACTIVE',
                 stripeSubscriptionId: newStripeSub.id,
@@ -185,21 +174,6 @@ export async function POST(req: Request) {
               .eq('id', currentSub.id)
               .select('*, plan:SubscriptionPlan(*)')
               .single();
-
-            await supabase
-              .from('BillingInvoice')
-              .insert({
-                id: nanoid(),
-                companyId: ctx.companyId,
-                invoiceNumber: `INV-SUB-${nanoid(6).toUpperCase()}`,
-                amountCents: newPlan.priceCents + (extraEndpoints * 1200),
-                currency: 'usd',
-                status: 'paid',
-                description: `Plan Switch to ${newPlan.name} Plan (${baseMax} endpoints)${extraEndpoints > 0 ? ` + ${extraEndpoints} Extra Endpoint(s)` : ''}`,
-                cardBrand: currentSub?.cardBrand || 'Card',
-                cardLast4: currentSub?.cardLast4 || '••••',
-                createdAt: new Date().toISOString(),
-              });
 
             await auditLog(ctx, 'SWITCH_PLAN', 'CompanySubscription', currentSub.id, {
               previousPlan: currentSub?.plan?.code,
@@ -242,7 +216,7 @@ export async function POST(req: Request) {
     const line_items: any[] = [
       {
         price: newPlan.stripePriceId,
-        quantity: 1,
+        quantity: newActiveSites,
       },
     ];
 
