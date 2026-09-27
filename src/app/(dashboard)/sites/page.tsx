@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { MapPin, Plus, Loader2, Edit2, Trash2, Users, Phone, X, CheckCircle2, XCircle, Mail, ExternalLink } from 'lucide-react';
+import { MapPin, Plus, Loader2, Edit2, Trash2, Users, Phone, X, CheckCircle2, XCircle, Mail, ExternalLink, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { formatPhoneDisplay } from '@/lib/phone';
 
@@ -9,6 +9,7 @@ interface Site {
   id: string;
   name: string;
   address: string | null;
+  timezone?: string | null;
   customerId: string;
   customer: { id: string; name: string };
   _count: { endpoints: number; recipients?: number };
@@ -26,6 +27,7 @@ export default function SitesPage() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
+  const [siteTimezone, setSiteTimezone] = useState('America/New_York');
   const [customerId, setCustomerId] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -108,7 +110,7 @@ export default function SitesPage() {
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, address, customerId }),
+      body: JSON.stringify({ name, address, customerId, timezone: siteTimezone }),
     });
     const json = await res.json();
     if (!res.ok) { 
@@ -131,16 +133,21 @@ export default function SitesPage() {
     setName(site.name);
     setAddress(site.address || '');
     setCustomerId(site.customer.id || site.customerId || ''); 
+    setSiteTimezone(site.timezone || 'America/New_York');
     setEditingId(site.id);
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this site?')) return;
-    setDeletingId(id);
-    const res = await fetch(`/api/sites/${id}`, { method: 'DELETE' });
+  const handleDelete = async (site: Site) => {
+    if (site._count && site._count.endpoints > 0) {
+      alert(`Cannot delete site "${site.name}" because it currently has ${site._count.endpoints} endpoint(s) assigned to it.\n\nPer Liable Alerts policy, a site cannot be removed while endpoints remain assigned. Please remove or reassign the endpoints under Endpoints before removing this site.`);
+      return;
+    }
+    if (!confirm(`Are you sure you want to delete site "${site.name}"?`)) return;
+    setDeletingId(site.id);
+    const res = await fetch(`/api/sites/${site.id}`, { method: 'DELETE' });
     const json = await res.json();
-    if (!res.ok) { alert(json.error || 'Failed to delete'); }
+    if (!res.ok) { alert(json.error || 'Failed to delete site'); }
     setDeletingId(null);
     fetchData();
   };
@@ -149,6 +156,7 @@ export default function SitesPage() {
     setName('');
     setAddress('');
     setCustomerId('');
+    setSiteTimezone('America/New_York');
     setShowForm(false);
     setSaving(false);
     setEditingId(null);
@@ -286,6 +294,27 @@ export default function SitesPage() {
               <label className="block text-xs font-medium text-smoke mb-1.5 tracking-[-0.24px]">Address</label>
               <input value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main St, City, State" className="w-full border border-ash-mist bg-paper-white rounded-xl px-4 py-2.5 text-sm text-graphite outline-none focus:ring-2 focus:ring-signal-blue/50 focus:border-signal-blue transition-all" />
             </div>
+            <div>
+              <label className="block text-xs font-medium text-smoke mb-1.5 tracking-[-0.24px]">Site Timezone *</label>
+              <select
+                value={siteTimezone}
+                onChange={e => setSiteTimezone(e.target.value)}
+                className="w-full border border-ash-mist bg-paper-white rounded-xl px-4 py-2.5 text-sm text-graphite outline-none focus:ring-2 focus:ring-signal-blue/50 focus:border-signal-blue transition-all"
+              >
+                <option value="America/New_York">Eastern Time (US & Canada, ET) — America/New_York</option>
+                <option value="America/Chicago">Central Time (US & Canada, CT) — America/Chicago</option>
+                <option value="America/Denver">Mountain Time (US & Canada, MT) — America/Denver</option>
+                <option value="America/Phoenix">Mountain Time (Arizona, MST) — America/Phoenix</option>
+                <option value="America/Los_Angeles">Pacific Time (US & Canada, PT) — America/Los_Angeles</option>
+                <option value="America/Anchorage">Alaska Time (AKT) — America/Anchorage</option>
+                <option value="Pacific/Honolulu">Hawaii Time (HST) — Pacific/Honolulu</option>
+                <option value="America/Halifax">Atlantic Time (AST) — America/Halifax</option>
+                <option value="Europe/London">GMT / British Time (London) — Europe/London</option>
+                <option value="Europe/Paris">Central European Time (Paris, Berlin) — Europe/Paris</option>
+                <option value="UTC">Coordinated Universal Time (UTC)</option>
+              </select>
+              <p className="text-[11px] text-smoke mt-1">Select the local timezone for equipment alarms and recipients located at this site.</p>
+            </div>
             <div className="flex gap-3 pt-1">
               <button type="submit" disabled={saving} className="flex items-center gap-2 bg-signal-blue text-white px-5 py-2.5 rounded-full font-semibold text-sm disabled:opacity-50 transition-opacity">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (editingId ? 'Save Changes' : 'Create Site')}
@@ -319,7 +348,15 @@ export default function SitesPage() {
               <tbody className="divide-y divide-ash-mist bg-paper-white">
                 {sites.map((s) => (
                   <tr key={s.id} className="hover:bg-ash-mist/50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-semibold text-ink-black tracking-[-0.32px]">{s.name}</td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-semibold text-ink-black tracking-[-0.32px]">{s.name}</div>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
+                          <Clock className="w-3 h-3 text-blue-500" />
+                          {s.timezone ? s.timezone.replace('America/', '').replace('Pacific/', '').replace('Europe/', '').replace('_', ' ') : 'Eastern'}
+                        </span>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-sm text-graphite tracking-[-0.28px]">{s.customer?.name || '—'}</td>
                     <td className="px-6 py-4 text-sm text-smoke tracking-[-0.28px]">{s.address || '—'}</td>
                     <td className="px-6 py-4 text-sm text-smoke tracking-[-0.28px]">
@@ -349,7 +386,7 @@ export default function SitesPage() {
                         <button onClick={() => handleEdit(s)} className="p-2 text-smoke hover:text-signal-blue transition-colors">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDelete(s.id)} disabled={deletingId === s.id} className="p-2 text-smoke hover:text-red-500 transition-colors disabled:opacity-50">
+                        <button onClick={() => handleDelete(s)} disabled={deletingId === s.id} className="p-2 text-smoke hover:text-red-500 transition-colors disabled:opacity-50">
                           {deletingId === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                         </button>
                       </div>

@@ -7,6 +7,7 @@ const siteSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   address: z.string().max(200).optional(),
   customerId: z.string().min(1, 'Customer is required'),
+  timezone: z.string().optional().default('America/New_York'),
 });
 
 export async function GET() {
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { name, address, customerId } = siteSchema.parse(body);
+    const { name, address, customerId, timezone } = siteSchema.parse(body);
 
     const supabase = getAdminClient();
     const { getSubscriptionUsage } = await import('@/services/endpointService');
@@ -102,7 +103,7 @@ export async function POST(req: Request) {
 
     const { data: site } = await supabase
       .from('Site')
-      .insert({ companyId: ctx.companyId, customerId, name, address })
+      .insert({ companyId: ctx.companyId, customerId, name, address, timezone: timezone || 'America/New_York' })
       .select()
       .single();
 

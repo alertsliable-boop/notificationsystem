@@ -36,7 +36,7 @@ export async function GET() {
         cardBrand: inv.cardBrand || sub?.cardBrand || 'Card',
         cardLast4: inv.cardLast4 || sub?.cardLast4 || '••••',
         date: inv.createdAt,
-        pdfUrl: inv.pdfUrl || null,
+        pdfUrl: `/billing/receipt/${inv.id || inv.stripeInvoiceId || inv.invoiceNumber}`,
       });
     }
   }
@@ -62,14 +62,14 @@ export async function GET() {
 
         invoices.push({
           id: inv.id,
-          invoiceNumber: inv.number || `INV-${inv.id.slice(-8).toUpperCase()}`,
+          invoiceNumber: inv.number || `REC-${inv.id.slice(-8).toUpperCase()}`,
           amountCents: inv.amount_paid || inv.total || 0,
           status: inv.status === 'paid' ? 'paid' : inv.status || 'paid',
           description: lineDescriptions,
           cardBrand: sub.cardBrand || 'Card',
           cardLast4: sub.cardLast4 || '••••',
           date: new Date(inv.created * 1000).toISOString(),
-          pdfUrl: inv.invoice_pdf || inv.hosted_invoice_url || null,
+          pdfUrl: `/billing/receipt/${inv.id}`,
         });
       }
     } catch (stripeErr) {
@@ -81,14 +81,14 @@ export async function GET() {
   if (invoices.length === 0 && sub?.plan && sub.plan.priceCents > 0) {
     invoices.push({
       id: `init_${sub.id}`,
-      invoiceNumber: `INV-${sub.id.slice(-6).toUpperCase()}`,
-      amountCents: sub.plan.priceCents + (sub.extraEndpoints ? sub.extraEndpoints * 1200 : 0),
+      invoiceNumber: `REC-${sub.id.slice(-6).toUpperCase()}`,
+      amountCents: sub.plan.priceCents + (sub.extraEndpoints ? sub.extraEndpoints * 1500 : 0),
       status: 'paid',
       description: `${sub.plan.name} Plan${sub.extraEndpoints ? ` + ${sub.extraEndpoints} Additional Endpoint(s)` : ''}`,
       cardBrand: sub.cardBrand || 'Card',
       cardLast4: sub.cardLast4 || '••••',
       date: sub.createdAt || new Date().toISOString(),
-      pdfUrl: null,
+      pdfUrl: `/billing/receipt/init_${sub.id}`,
     });
   }
 

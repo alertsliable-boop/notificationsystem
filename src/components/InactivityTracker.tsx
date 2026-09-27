@@ -5,8 +5,8 @@ import { useSession, signOut } from 'next-auth/react';
 import { ShieldAlert, LogOut, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
-// 5 minutes total inactivity allowed (in milliseconds)
-const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+// 10 minutes total inactivity allowed (in milliseconds)
+const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
 // Show warning dialog 30 seconds before logout
 const WARNING_THRESHOLD_MS = 30 * 1000;
 const STORAGE_KEY = 'liable_last_activity_ts';

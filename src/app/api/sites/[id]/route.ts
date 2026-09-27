@@ -7,6 +7,7 @@ const siteSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   address: z.string().max(255).optional().nullable(),
   customerId: z.string().min(1, 'Customer is required'),
+  timezone: z.string().optional().nullable(),
 });
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string  }> }) {
@@ -17,7 +18,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   try {
     const body = await req.json();
-    const { name, address, customerId } = siteSchema.parse(body);
+    const { name, address, customerId, timezone } = siteSchema.parse(body);
 
     const supabase = getAdminClient();
     const { data: existing } = await supabase
@@ -43,9 +44,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Invalid customer' }, { status: 400 });
     }
 
+    const updatePayload: any = { name, address, customerId };
+    if (timezone) updatePayload.timezone = timezone;
+
     const { data: site } = await supabase
       .from('Site')
-      .update({ name, address, customerId })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single();

@@ -8,6 +8,7 @@ import {
   ArrowLeft, Mail, MapPin, Users, Clock,
   CheckCircle2, XCircle, AlertCircle, Phone, MessageSquare
 } from 'lucide-react';
+import { FormattedTimestamp } from '@/components/FormattedTimestamp';
 
 export const metadata = { title: 'Notification Detail | Liable Alerts' };
 
@@ -103,10 +104,7 @@ export default async function NotificationDetailPage({
               {notification.subject || '(No Subject)'}
             </h1>
             <p className="text-xs sm:text-[13px] text-gray-500">
-              Received {new Date(notification.receivedAt).toLocaleString('en-US', {
-                weekday: 'short', month: 'short', day: 'numeric',
-                year: 'numeric', hour: '2-digit', minute: '2-digit'
-              })}
+              Received <FormattedTimestamp isoString={notification.receivedAt} mode="datetime" />
             </p>
           </div>
           <div className="flex gap-2 self-start sm:self-auto">
@@ -185,7 +183,7 @@ export default async function NotificationDetailPage({
                             <div className="w-1.5 h-1.5 bg-gray-300 rounded-full flex-shrink-0" />
                             <StatusBadge status={event.status} />
                             <span className="text-gray-400">
-                              {new Date(event.receivedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              <FormattedTimestamp isoString={event.receivedAt} mode="time" />
                             </span>
                             {event.errorCode && (
                               <span className="text-red-500 font-mono">Error: {event.errorCode}</span>

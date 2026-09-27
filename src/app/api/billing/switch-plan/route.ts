@@ -79,25 +79,63 @@ export async function POST(req: Request) {
 
     // If company already has an active, paying Stripe subscription, update it directly via Stripe API
     let updatedViaStripe = false;
+    let stripeErrorMsg = '';
+
     if (currentSub?.stripeSubscriptionId && !currentSub.stripeSubscriptionId.startsWith('mock_') && isStripeConfigured()) {
       try {
         const stripeSub = await stripe.subscriptions.retrieve(currentSub.stripeSubscriptionId);
 
         if (stripeSub.status === 'active' || stripeSub.status === 'trialing') {
-          const subItemId = stripeSub.items.data[0].id;
+          const sitePriceId = process.env.NEXT_PUBLIC_STRIPE_SITE_PRICE_ID || 'price_1UGi0d33lejKAXgDiGPnXQXW';
+          const siteItem = stripeSub.items.data.find(
+            (it: any) => it.price.id === sitePriceId || (it.price.recurring as any)?.tiers_mode === 'volume'
+          ) || stripeSub.items.data[0];
 
-          await stripe.subscriptions.update(stripeSub.id, {
-            items: [{ id: subItemId, price: newPlan.stripePriceId || undefined, quantity: newActiveSites }],
+          const updatedSubscription = await stripe.subscriptions.update(stripeSub.id, {
+            items: [{ id: siteItem.id, price: newPlan.stripePriceId || undefined, quantity: newActiveSites }],
             proration_behavior: isUpgrade ? 'always_invoice' : 'none',
+            payment_behavior: isUpgrade ? 'error_if_incomplete' : 'allow_incomplete',
+            expand: ['latest_invoice.payment_intent'],
             metadata: {
               planCode: newPlan.code,
               planId: newPlan.id,
+              activeSites: String(newActiveSites),
             },
           });
+
+          // Record latest invoice/receipt in BillingInvoice table if generated and paid
+          if (updatedSubscription.latest_invoice && typeof updatedSubscription.latest_invoice === 'object') {
+            const inv = updatedSubscription.latest_invoice as any;
+            if (inv.amount_paid > 0 || inv.status === 'paid') {
+              await supabase.from('BillingInvoice').upsert({
+                id: nanoid(),
+                companyId: ctx.companyId,
+                stripeInvoiceId: inv.id,
+                invoiceNumber: inv.number || `REC-${inv.id.slice(-8).toUpperCase()}`,
+                amountCents: inv.amount_paid || inv.total || 0,
+                currency: inv.currency || 'usd',
+                status: 'paid',
+                description: `Prorated update: ${newActiveSites} Sites (${newPlan.name})`,
+                cardBrand: currentSub.cardBrand || 'Card',
+                cardLast4: currentSub.cardLast4 || '••••',
+                pdfUrl: inv.invoice_pdf || null,
+                createdAt: new Date().toISOString(),
+              }, { onConflict: 'stripeInvoiceId' });
+            }
+          }
+
           updatedViaStripe = true;
         }
       } catch (err: any) {
-        console.warn('Could not update existing Stripe subscription, falling back to Stripe Checkout:', err.message);
+        console.error('[SWITCH_PLAN] Stripe subscription update error:', err.message);
+        stripeErrorMsg = err.message || 'Payment method failed';
+        if (isUpgrade) {
+          // If it was an upgrade and payment failed, do NOT proceed or give free capacity!
+          return NextResponse.json(
+            { error: `Payment failed: ${stripeErrorMsg}. Your current subscription remains active. Please update your card in Billing.` },
+            { status: 402 }
+          );
+        }
       }
     }
 
@@ -122,6 +160,7 @@ export async function POST(req: Request) {
       await auditLog(ctx, 'SWITCH_PLAN', 'CompanySubscription', currentSub?.id || ctx.companyId, {
         previousPlan: currentSub?.plan?.code,
         newPlan: newPlan.code,
+        activeSites: newActiveSites,
         extraEndpoints,
         isUpgrade,
       });
@@ -129,7 +168,7 @@ export async function POST(req: Request) {
       return NextResponse.json({
         success: true,
         data: updatedSub,
-        message: `Successfully switched to ${newPlan.name} Plan!`,
+        message: `Successfully updated subscription to ${newActiveSites} site${newActiveSites > 1 ? 's' : ''}!`,
       });
     }
 

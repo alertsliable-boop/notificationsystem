@@ -64,28 +64,57 @@ export async function POST(req: Request) {
           (item) => item.price.id === STRIPE_EXTRA_ENDPOINT_PRICE_ID
         );
 
-        if (newExtra > 0) {
-          if (existingItem) {
-            await stripe.subscriptionItems.update(existingItem.id, {
-              quantity: newExtra,
-              proration_behavior: addedQty > 0 ? 'always_invoice' : 'none',
-            });
+        const subItems: any[] = [];
+        if (existingItem) {
+          if (newExtra > 0) {
+            subItems.push({ id: existingItem.id, quantity: newExtra });
           } else {
-            await stripe.subscriptionItems.create({
-              subscription: stripeSub.id,
-              price: STRIPE_EXTRA_ENDPOINT_PRICE_ID,
-              quantity: newExtra,
-              proration_behavior: 'always_invoice',
-            });
+            subItems.push({ id: existingItem.id, deleted: true });
           }
-        } else if (existingItem) {
-          // Extra count set to 0, delete item
-          await stripe.subscriptionItems.del(existingItem.id, {
-            proration_behavior: 'none',
+        } else if (newExtra > 0) {
+          subItems.push({ price: STRIPE_EXTRA_ENDPOINT_PRICE_ID, quantity: newExtra });
+        }
+
+        if (subItems.length > 0) {
+          const updatedSub = await stripe.subscriptions.update(stripeSub.id, {
+            items: subItems,
+            proration_behavior: addedQty > 0 ? 'always_invoice' : 'none',
+            payment_behavior: addedQty > 0 ? 'error_if_incomplete' : 'allow_incomplete',
+            expand: ['latest_invoice.payment_intent'],
+            metadata: {
+              extraEndpoints: String(newExtra),
+            },
           });
+
+          // Record latest invoice/receipt in BillingInvoice table if generated and paid
+          if (updatedSub.latest_invoice && typeof updatedSub.latest_invoice === 'object') {
+            const inv = updatedSub.latest_invoice as any;
+            if (inv.amount_paid > 0 || inv.status === 'paid') {
+              await supabase.from('BillingInvoice').upsert({
+                id: nanoid(),
+                companyId: ctx.companyId,
+                stripeInvoiceId: inv.id,
+                invoiceNumber: inv.number || `REC-${inv.id.slice(-8).toUpperCase()}`,
+                amountCents: inv.amount_paid || inv.total || 0,
+                currency: inv.currency || 'usd',
+                status: 'paid',
+                description: `Prorated: ${addedQty} Additional Endpoint(s) (${newExtra} total)`,
+                cardBrand: sub.cardBrand || 'Card',
+                cardLast4: sub.cardLast4 || '••••',
+                pdfUrl: inv.invoice_pdf || null,
+                createdAt: new Date().toISOString(),
+              }, { onConflict: 'stripeInvoiceId' });
+            }
+          }
         }
       } catch (stripeErr: any) {
-        console.warn('Could not update Stripe subscription for extra endpoints:', stripeErr.message);
+        console.error('[EXTRA_ENDPOINTS] Stripe subscription update error:', stripeErr.message);
+        if (addedQty > 0) {
+          return NextResponse.json(
+            { error: `Payment failed: ${stripeErr.message}. Your payment card could not be charged for the additional endpoint. Quota was not increased.` },
+            { status: 402 }
+          );
+        }
       }
     } else if (sub.stripeCustomerId && addedQty > 0 && isStripeConfigured()) {
       // If customer has a Stripe Customer ID with card on file but no active Stripe Subscription ID yet

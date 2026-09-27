@@ -76,14 +76,15 @@ export async function getSubscriptionUsage(companyId: string) {
   // Query SMS usage in current billing period
   const { data: smsRows } = await supabase
     .from('SmsMessage')
-    .select('id, segments, notification!inner(endpointId, companyId)')
-    .eq('notification.companyId', companyId)
+    .select('id, segments, Notification!inner(endpointId, companyId)')
+    .eq('Notification.companyId', companyId)
     .gte('createdAt', periodStart);
 
   const endpointCreditMap = new Map<string, number>();
   let totalCreditsUsed = 0;
   (smsRows || []).forEach((row: any) => {
-    const epId = row.notification?.endpointId;
+    const notifObj = row.Notification || row.notification;
+    const epId = notifObj?.endpointId;
     const segs = row.segments || 1;
     totalCreditsUsed += segs;
     if (epId) {

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Building2, Mail, Lock, User, Phone, Loader2, Zap, CheckCircle2, Shield, Clock } from 'lucide-react';
+import { Building2, Mail, Lock, User, Phone, Loader2, Zap, CheckCircle2, Shield, Clock, Globe, MapPin } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
@@ -15,10 +15,24 @@ export default function RegisterPage() {
     password: '',
     companyName: '',
     phone: '',
-    smsConsent: false
+    smsConsent: false,
+    country: 'United States',
+    city: '',
+    timezone: 'America/New_York',
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    try {
+      const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (userTz) {
+        setFormData(prev => ({ ...prev, timezone: userTz }));
+      }
+    } catch (e) {
+      // Keep America/New_York
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,9 +67,12 @@ export default function RegisterPage() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const target = e.target;
+    const { name, value } = target;
+    const isCheckbox = (target as HTMLInputElement).type === 'checkbox';
+    const checked = (target as HTMLInputElement).checked;
+    setFormData(prev => ({ ...prev, [name]: isCheckbox ? checked : value }));
   };
 
   return (
@@ -128,7 +145,7 @@ export default function RegisterPage() {
 
           <div className="mb-6 sm:mb-8">
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Create your account</h2>
-            <p className="text-sm sm:text-base text-gray-600">Start automating SMS alerts in minutes</p>
+            <p className="text-sm sm:text-base text-gray-600">Start your 7-day free trial in minutes</p>
           </div>
 
           {error && (
@@ -159,6 +176,69 @@ export default function RegisterPage() {
               onChange={handleChange}
               icon={<Building2 className="w-4 h-4" />}
             />
+
+            {/* Country and City */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+                  <Globe className="w-3.5 h-3.5 text-gray-400" /> Country *
+                </label>
+                <select
+                  name="country"
+                  value={formData.country}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  required
+                >
+                  <option value="United States">United States</option>
+                  <option value="Canada">Canada</option>
+                  <option value="United Kingdom">United Kingdom</option>
+                  <option value="Australia">Australia</option>
+                  <option value="Mexico">Mexico</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-gray-400" /> City
+                </label>
+                <input
+                  name="city"
+                  type="text"
+                  placeholder="e.g. Miami, New York"
+                  value={formData.city}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Timezone */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-gray-400" /> Primary Timezone *
+              </label>
+              <select
+                name="timezone"
+                value={formData.timezone}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                required
+              >
+                <option value="America/New_York">Eastern Time (US & Canada, ET) — America/New_York</option>
+                <option value="America/Chicago">Central Time (US & Canada, CT) — America/Chicago</option>
+                <option value="America/Denver">Mountain Time (US & Canada, MT) — America/Denver</option>
+                <option value="America/Phoenix">Mountain Time (Arizona, MST) — America/Phoenix</option>
+                <option value="America/Los_Angeles">Pacific Time (US & Canada, PT) — America/Los_Angeles</option>
+                <option value="America/Anchorage">Alaska Time (AKT) — America/Anchorage</option>
+                <option value="Pacific/Honolulu">Hawaii Time (HST) — Pacific/Honolulu</option>
+                <option value="America/Halifax">Atlantic Time (AST) — America/Halifax</option>
+                <option value="Europe/London">GMT / British Time (London) — Europe/London</option>
+                <option value="Europe/Paris">Central European Time (Paris, Berlin) — Europe/Paris</option>
+                <option value="UTC">Coordinated Universal Time (UTC)</option>
+              </select>
+            </div>
 
             <Input
               name="email"
@@ -196,6 +276,17 @@ export default function RegisterPage() {
               helperText="Optional. SMS notifications are not required to create an account or use our service."
             />
 
+            {/* Free Trial & Billing Terms Notice */}
+            <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-3.5 space-y-1 text-xs text-blue-950">
+              <p className="font-bold flex items-center gap-1.5 text-blue-900">
+                <Shield className="w-4 h-4 text-blue-600" />
+                7-Day Free Trial & Auto-Renewal Notice:
+              </p>
+              <p className="leading-relaxed text-blue-900/80">
+                Your first 7 days are completely free. You will enter your payment method to activate your trial and secure your alarm endpoints. If you do not cancel before your 7-day trial concludes, your chosen subscription plan will be billed automatically. That trial-ending date becomes your permanent recurring monthly billing date.
+              </p>
+            </div>
+
             <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4 space-y-2">
               <div className="flex items-start gap-3">
                 <input
@@ -230,7 +321,7 @@ export default function RegisterPage() {
                 isLoading={isLoading}
                 className="w-full"
               >
-                {isLoading ? 'Creating account...' : 'Create Account'}
+                {isLoading ? 'Creating account...' : 'Start 7-Day Free Trial'}
               </Button>
             </div>
           </form>

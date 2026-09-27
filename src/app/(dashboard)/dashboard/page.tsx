@@ -5,9 +5,12 @@ import { getAdminClient } from '@/lib/supabase';
 import {
   Mail, TrendingUp, Activity, AlertCircle, CheckCircle2,
   Clock, ArrowRight, Bell, Zap, Users, MapPin, Phone,
-  BarChart3, ArrowUpRight, ArrowDownRight
+  BarChart3, ArrowUpRight, ArrowDownRight, Calendar, RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';
+import LiveClockHeader from '@/components/LiveClockHeader';
+import RealtimeAutoRefresher from '@/components/RealtimeAutoRefresher';
+import FormattedTimestamp from '@/components/FormattedTimestamp';
 
 export const metadata = { title: 'Dashboard | Liable Alerts' };
 
@@ -54,7 +57,7 @@ export default async function DashboardPage() {
       .eq('companyId', companyId)
       .order('receivedAt', { ascending: false })
       .limit(7),
-    supabase.from('SmsMessage').select('status, notification!inner(companyId)').eq('notification.companyId', companyId),
+    supabase.from('SmsMessage').select('status, Notification!inner(companyId)').eq('Notification.companyId', companyId),
     supabase.from('Notification').select('*', { count: 'exact', head: true }).eq('companyId', companyId),
     supabase.from('Notification').select('*', { count: 'exact', head: true }).eq('companyId', companyId).gte('receivedAt', startOfTodayIso),
     supabase.from('Notification').select('*', { count: 'exact', head: true }).eq('companyId', companyId).gte('receivedAt', startOfMonthIso),
@@ -79,6 +82,22 @@ export default async function DashboardPage() {
   const totalSms = Object.values(smsStatsObj).reduce((sum: any, val: any) => sum + val, 0) as number;
   const deliveryRate = totalSms > 0 ? Math.round((delivered / totalSms) * 100) : 100;
   const usagePct = maxEndpoints > 0 ? Math.round(((activeEndpoints || 0) / maxEndpoints) * 100) : 0;
+
+  // Billing cycle calculations
+  const pStart = subscription?.currentPeriodStart ? new Date(subscription.currentPeriodStart) : null;
+  const pEnd = subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd) : null;
+  const bDay = pEnd ? pEnd.getDate() : (pStart ? pStart.getDate() : 21);
+  const bDaySuffix = bDay === 1 || bDay === 21 || bDay === 31 ? 'st' : bDay === 2 || bDay === 22 ? 'nd' : bDay === 3 || bDay === 23 ? 'rd' : 'th';
+  
+  const cycleDateStr = pStart && pEnd
+    ? `${pStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${pEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+    : 'Monthly recurring';
+    
+  const nextRenewalStr = pEnd
+    ? pEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : `${bDay}${bDaySuffix} of each month`;
+
+  const includedSmsCredits = subscription?.status === 'TRIALING' ? 25 : (maxEndpoints * 250);
 
   const stats = [
     {
@@ -131,6 +150,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8 animate-fadeIn">
+      {/* Realtime Live Auto-Refresher (updates counters & messages as alerts arrive) */}
+      <RealtimeAutoRefresher companyId={companyId} intervalMs={6000} />
+
       {/* Welcome Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -141,10 +163,7 @@ export default async function DashboardPage() {
             Here&apos;s what&apos;s happening with your alert platform.
           </p>
         </div>
-        <div className="hidden md:flex items-center gap-2 text-[12px] text-gray-500 bg-white border border-gray-200 rounded-xl px-4 py-2.5">
-          <Clock className="w-3.5 h-3.5" />
-          {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-        </div>
+        <LiveClockHeader showTime />
       </div>
 
       {/* Limit Reached Banner */}
@@ -297,9 +316,7 @@ export default async function DashboardPage() {
                       </p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-[11px] text-gray-400">
-                        {new Date(notif.receivedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                      <FormattedTimestamp isoString={notif.receivedAt} mode="time" className="text-[11px] text-gray-400 block" />
                       <p className="text-[11px] text-gray-400">
                         {notif.smsMessages.length} SMS
                       </p>
@@ -314,8 +331,8 @@ export default async function DashboardPage() {
 
         {/* Right Column */}
         <div className="space-y-5">
-          {/* Current Plan Card */}
-          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white">
+          {/* Current Plan & Billing Cycle Card */}
+          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-md">
             <div className="flex items-center justify-between mb-4">
               <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
                 <Zap className="w-4.5 h-4.5 text-white" fill="currentColor" />
@@ -326,9 +343,11 @@ export default async function DashboardPage() {
             </div>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-200 mb-1">Current Plan</p>
             <h3 className="text-[22px] font-bold leading-tight mb-0.5">{subscription?.plan?.name || 'Starter Plan'}</h3>
-            <p className="text-[13px] text-blue-200">{maxEndpoints > 0 ? `${maxEndpoints} Email Endpoints` : 'Loading usage…'}</p>
+            <p className="text-[13px] text-blue-200">
+              {subscription?.activeSites || 1} Active Site{(subscription?.activeSites || 1) > 1 ? 's' : ''} • {maxEndpoints} Endpoints
+            </p>
 
-            {/* Trial end date */}
+            {/* Trial notification banner */}
             {subscription?.status === 'TRIALING' && subscription?.currentPeriodEnd && (() => {
               const trialEnd = new Date(subscription.currentPeriodEnd);
               const daysLeft = Math.ceil((trialEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -338,17 +357,40 @@ export default async function DashboardPage() {
                   {daysLeft <= 0
                     ? '⚠️ Trial has ended — please upgrade'
                     : daysLeft <= 3
-                    ? `⚠️ Trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`
-                    : `Trial ends ${trialEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · ${daysLeft}d left`
+                    ? `⚠️ Free trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Regular billing begins on ${trialEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                    : `7-Day Free Trial active. First payment charges ${trialEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} (${daysLeft}d left)`
                   }
                 </div>
               );
             })()}
 
+            {/* Cellular-style Billing Cycle & Next Reset Date */}
+            {subscription?.status !== 'TRIALING' && (
+              <div className="mt-3.5 pt-3 border-t border-white/15 space-y-1.5 text-xs text-blue-100">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-blue-200 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-blue-200" />
+                    Billing Cycle:
+                  </span>
+                  <span className="font-semibold text-white text-[11.5px]">{cycleDateStr}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-blue-200 flex items-center gap-1.5">
+                    <RefreshCw className="w-3.5 h-3.5 text-blue-200" />
+                    Next Cycle &amp; Reset:
+                  </span>
+                  <span className="font-bold text-white text-[11.5px]">{nextRenewalStr}</span>
+                </div>
+                <p className="text-[10px] text-blue-200/80 pt-0.5">
+                  Recurring renewal and {includedSmsCredits} SMS message credits reset on the {bDay}{bDaySuffix} of each month.
+                </p>
+              </div>
+            )}
+
             {/* Mini usage bar */}
             <div className="mt-4">
               <div className="flex justify-between text-[11px] text-blue-200 mb-1.5">
-                <span>Usage</span>
+                <span>Active Endpoints</span>
                 <span>{activeEndpoints}/{maxEndpoints}</span>
               </div>
               <div className="h-2 bg-white/20 rounded-full overflow-hidden">
@@ -361,9 +403,9 @@ export default async function DashboardPage() {
 
             <Link
               href="/billing"
-              className="mt-4 block text-center bg-white text-blue-700 font-bold text-[13px] py-2.5 rounded-xl hover:bg-blue-50 transition-colors"
+              className="mt-4 block text-center bg-white text-blue-700 font-bold text-[13px] py-2.5 rounded-xl hover:bg-blue-50 transition-colors shadow-xs"
             >
-              {subscription?.status === 'TRIALING' ? 'Upgrade Plan →' : 'Manage Subscription'}
+              {subscription?.status === 'TRIALING' ? 'Manage Free Trial & Plan →' : 'Manage Subscription & Invoices'}
             </Link>
           </div>
 

@@ -10,12 +10,15 @@ const registerSchema = z.object({
   companyName: z.string().min(2),
   phone: z.string().optional(),
   smsConsent: z.boolean().optional(),
+  country: z.string().optional(),
+  city: z.string().optional(),
+  timezone: z.string().optional(),
 });
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, email, password, companyName, phone, smsConsent } = registerSchema.parse(body);
+    const { name, email, password, companyName, phone, smsConsent, country, city, timezone } = registerSchema.parse(body);
 
     const supabase = getAdminClient();
     const { data: existingUser } = await supabase
@@ -36,6 +39,9 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    const resolvedTimezone = timezone || 'America/New_York';
+    const resolvedCountry = country || 'United States';
+    const resolvedCity = city || '';
 
     const { data: newUser } = await supabase
       .from('User')
@@ -43,6 +49,9 @@ export async function POST(req: Request) {
         name,
         email,
         passwordHash,
+        country: resolvedCountry,
+        city: resolvedCity,
+        timezone: resolvedTimezone,
       })
       .select()
       .single();
@@ -54,6 +63,9 @@ export async function POST(req: Request) {
       .insert({
         name: companyName,
         slug,
+        country: resolvedCountry,
+        city: resolvedCity,
+        timezone: resolvedTimezone,
       })
       .select()
       .single();

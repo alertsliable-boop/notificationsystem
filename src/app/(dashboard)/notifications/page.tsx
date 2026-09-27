@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { getAdminClient } from '@/lib/supabase';
 import { Bell, CheckCircle2, XCircle, Clock, ArrowRight, Mail } from 'lucide-react';
 import Link from 'next/link';
+import { RealtimeAutoRefresher } from '@/components/RealtimeAutoRefresher';
+import { FormattedTimestamp } from '@/components/FormattedTimestamp';
 
 export const metadata = { title: 'Notifications | Liable Alerts' };
 
@@ -82,6 +84,7 @@ export default async function NotificationsPage({
 
   return (
     <div className="space-y-8 animate-fadeIn">
+      <RealtimeAutoRefresher companyId={companyId} intervalMs={5000} />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -182,10 +185,7 @@ export default async function NotificationsPage({
                         <td className="px-6 py-4 text-[12px] text-gray-400 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotColor}`} />
-                            {new Date(notif.receivedAt).toLocaleString('en-US', {
-                              month: 'short', day: 'numeric',
-                              hour: '2-digit', minute: '2-digit'
-                            })}
+                            <FormattedTimestamp isoString={notif.receivedAt} mode="datetime" />
                           </div>
                         </td>
                         <td className="px-6 py-4">

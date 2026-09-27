@@ -21,6 +21,7 @@ import {
   ChargeHistorySection,
 } from './PlanManager';
 import BillingViewTabs from './BillingViewTabs';
+import { RealtimeAutoRefresher } from '@/components/RealtimeAutoRefresher';
 
 export const metadata = { title: 'Billing & Site Pricing Plans | Liable Alerts' };
 
@@ -212,8 +213,23 @@ export default async function BillingPage({
   const endpointUsagePct = Math.min(100, Math.round((usage.activeCount / Math.max(1, usage.maxActiveEndpoints)) * 100));
   const smsUsagePct = Math.min(100, Math.round((usage.totalCreditsUsed / Math.max(1, usage.includedCredits)) * 100));
 
+  // Cellular-style billing cycle calculations
+  const pStart = subscription?.currentPeriodStart ? new Date(subscription.currentPeriodStart) : null;
+  const pEnd = subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd) : null;
+  const bDay = pEnd ? pEnd.getDate() : (pStart ? pStart.getDate() : 21);
+  const bDaySuffix = bDay === 1 || bDay === 21 || bDay === 31 ? 'st' : bDay === 2 || bDay === 22 ? 'nd' : bDay === 3 || bDay === 23 ? 'rd' : 'th';
+  
+  const cycleDateStr = pStart && pEnd
+    ? `${pStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${pEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+    : 'Monthly recurring';
+    
+  const nextRenewalStr = pEnd
+    ? pEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : `${bDay}${bDaySuffix} of each month`;
+
   return (
     <div className="space-y-8 sm:space-y-10 animate-fadeIn max-w-5xl py-4 sm:py-6">
+      <RealtimeAutoRefresher companyId={membership.companyId} intervalMs={5000} />
       {/* Success/Cancel Banners */}
       {(status === 'setup_success' || setup_success === 'true') && (
         <div className="p-4 bg-green-50 border border-green-200 rounded-2xl flex items-start gap-3 animate-fadeIn shadow-xs">
@@ -411,6 +427,38 @@ export default async function BillingPage({
                     {usage.isTrial ? '25 credits for free trial' : '250 credits included per endpoint'}
                   </p>
                 </div>
+              </div>
+
+              {/* Cellular-Style Monthly Billing Cycle Schedule */}
+              <div className="mt-5 p-4 rounded-xl bg-white border border-blue-100 shadow-2xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs font-bold text-gray-900 uppercase tracking-wide">Monthly Billing Cycle Schedule</span>
+                  </div>
+                  <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
+                    Resets on the {bDay}{bDaySuffix} of every month
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <span className="text-gray-400 block font-medium">Billing Period:</span>
+                    <span className="font-bold text-gray-900 text-[13px]">{cycleDateStr}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block font-medium">Next Invoice &amp; Renewal:</span>
+                    <span className="font-bold text-gray-900 text-[13px]">{nextRenewalStr}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block font-medium">Single Combined Invoice:</span>
+                    <span className="font-semibold text-emerald-700 text-[13px]">All sites &amp; endpoints renew together</span>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-gray-500 pt-1 leading-normal border-t border-gray-100/60">
+                  ℹ️ <strong>SMS Credit Policy:</strong> Unused message credits expire at the end of each billing cycle ({nextRenewalStr}) and reset to your base allowance. They do not roll over to the next billing cycle.
+                </p>
               </div>
             </CardContent>
           </Card>

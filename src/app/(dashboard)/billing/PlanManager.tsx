@@ -894,10 +894,10 @@ export function ChargeHistorySection() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <FileText className="w-5 h-5 text-gray-700" />
-            <h3 className="text-[17px] font-bold text-gray-900">Billing & Charge History Record</h3>
+            <h3 className="text-[17px] font-bold text-gray-900">Payment Receipts &amp; Billing History</h3>
           </div>
           <p className="text-[13px] text-gray-500">
-            Track all transactions, monthly subscription charges, and download payment receipts
+            Track all transactions, monthly subscription payments, and view official payment receipts
           </p>
         </div>
       </div>
@@ -909,8 +909,8 @@ export function ChargeHistorySection() {
       ) : invoices.length === 0 ? (
         <div className="py-12 text-center text-gray-400 space-y-2">
           <FileText className="w-8 h-8 mx-auto text-gray-300" />
-          <p className="text-sm font-semibold text-gray-600">No charge records found</p>
-          <p className="text-xs text-gray-400">Transactions will be listed here after your billing cycle charges.</p>
+          <p className="text-sm font-semibold text-gray-600">No payment receipts found</p>
+          <p className="text-xs text-gray-400">Receipts will be listed here after your billing cycle charges.</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -918,7 +918,7 @@ export function ChargeHistorySection() {
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="px-6 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Invoice #</th>
+                <th className="px-6 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Receipt #</th>
                 <th className="px-6 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Description</th>
                 <th className="px-6 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Payment Method</th>
                 <th className="px-6 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Amount</th>
@@ -959,9 +959,9 @@ export function ChargeHistorySection() {
                         href={inv.pdfUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 transition"
+                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 transition bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200"
                       >
-                        <Download className="w-3.5 h-3.5" /> PDF
+                        <FileText className="w-3.5 h-3.5" /> View Receipt
                       </a>
                     ) : (
                       <span className="text-[11px] text-gray-400 font-medium">Receipt on file</span>
@@ -1001,6 +1001,11 @@ export function SitePricingCalculator({
   
   const router = useRouter();
 
+  const currentSubscribed = Math.max(1, currentSubscribedSites || 1);
+  const isUnchanged = siteCount === currentSubscribed;
+  const isUpgrade = siteCount > currentSubscribed;
+  const isDowngrade = siteCount < currentSubscribed;
+
   const getTierInfo = (sites: number) => {
     if (sites >= 50) return { rate: 34, code: 'site_enterprise', name: 'Enterprise', range: '50+ sites' };
     if (sites >= 25) return { rate: 39, code: 'site_pro_plus', name: 'Professional Plus', range: '25–49 sites' };
@@ -1008,8 +1013,18 @@ export function SitePricingCalculator({
     return { rate: 49, code: 'site_starter', name: 'Starter', range: '1–9 sites' };
   };
 
-  const currentTier = getTierInfo(siteCount);
-  const monthlyTotal = siteCount * currentTier.rate;
+  const calculateMonthlyCost = (sites: number) => {
+    const tier = getTierInfo(sites);
+    let total = sites * tier.rate;
+    // Anti-cliff protection: customer cost must never decrease when adding a site
+    if (sites >= 10 && sites < 25) total = Math.max(total, 9 * 49);
+    if (sites >= 25 && sites < 50) total = Math.max(total, 24 * 44);
+    if (sites >= 50) total = Math.max(total, 49 * 39);
+    return { total, rate: tier.rate, tier };
+  };
+
+  const { total: monthlyTotal, rate: unitRate, tier: currentTier } = calculateMonthlyCost(siteCount);
+  const { total: currentMonthlyTotal } = calculateMonthlyCost(currentSubscribed);
   const includedCredits = siteCount * 250;
 
   const TIERS = [
@@ -1284,21 +1299,48 @@ export function SitePricingCalculator({
           {error && (
             <span className="text-red-300 text-xs font-medium max-w-xs">{error}</span>
           )}
-          <button
-            type="button"
-            onClick={handleSubscribe}
-            disabled={loading}
-            className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm disabled:opacity-50"
-          >
-            {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <CreditCard className="w-4 h-4" />
-            )}
-            {isTrial ? `Subscribe for ${siteCount} Site${siteCount > 1 ? 's' : ''}` : `Update to ${siteCount} Site${siteCount > 1 ? 's' : ''}`}
-          </button>
+          {isTrial ? (
+            <button
+              type="button"
+              onClick={handleSubscribe}
+              disabled={loading}
+              className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+              Subscribe for {siteCount} Site{siteCount > 1 ? 's' : ''}
+            </button>
+          ) : isUnchanged ? (
+            <button
+              type="button"
+              disabled
+              className="px-6 py-3 bg-white/20 text-blue-100 font-bold rounded-xl cursor-default flex items-center justify-center gap-2 text-sm border border-white/20"
+            >
+              <Check className="w-4 h-4 text-green-300" />
+              Current Plan ({siteCount} Sites Active)
+            </button>
+          ) : isUpgrade ? (
+            <button
+              type="button"
+              onClick={handleSubscribe}
+              disabled={loading}
+              className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4" />}
+              Upgrade to {siteCount} Sites (+{siteCount - currentSubscribed} new)
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSubscribe}
+              disabled={loading}
+              className="px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
+              Downgrade to {siteCount} Sites (-{currentSubscribed - siteCount})
+            </button>
+          )}
           <span className="text-[11px] text-blue-300 text-center md:text-right">
-            Instant activation via Stripe • Cancel or adjust anytime
+            {isUpgrade ? 'Immediate prorated charge • Instant activation' : isDowngrade ? 'Takes effect at next renewal date • No service loss' : 'Instant activation via Stripe'}
           </span>
         </div>
       </div>
@@ -1315,12 +1357,16 @@ export function SitePricingCalculator({
             <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative space-y-4 animate-in fade-in zoom-in-95 duration-200">
               <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="p-2 rounded-xl bg-blue-50 text-blue-600">
-                    <CreditCard className="w-5 h-5" />
+                  <span className={`p-2 rounded-xl ${isUpgrade ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+                    {isUpgrade ? <CreditCard className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
                   </span>
                   <div>
-                    <h3 className="font-bold text-[17px] text-gray-900">Confirm Subscription Change</h3>
-                    <p className="text-xs text-gray-500">Review charge details and billing proration</p>
+                    <h3 className="font-bold text-[17px] text-gray-900">
+                      {isUpgrade ? 'Confirm Site Upgrade' : 'Confirm Subscription Downgrade'}
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      {isUpgrade ? 'Review prorated charge and immediate activation' : 'Review renewal schedule and quota adjustments'}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -1333,37 +1379,45 @@ export function SitePricingCalculator({
               </div>
 
               {/* Summary Box */}
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-gray-500 font-medium">New Plan Tier:</span>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-2.5 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">Current Plan:</span>
+                  <span className="font-semibold text-gray-700">{currentSubscribed} sites (${currentMonthlyTotal.toFixed(2)}/mo)</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">New Plan:</span>
                   <span className="font-bold text-gray-900">{currentTier.name} ({siteCount} sites)</span>
                 </div>
-                <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
-                  <span className="text-xs font-bold text-gray-900">New Monthly Cost:</span>
-                  <span className="text-sm font-bold text-blue-700">${monthlyTotal.toFixed(2)}/mo</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">New Monthly Recurring Rate:</span>
+                  <span className="font-bold text-blue-700">${monthlyTotal.toFixed(2)}/mo</span>
                 </div>
-                
-                {siteCount > Math.max(1, currentSubscribedSites || 1) && (
+
+                {isUpgrade && (
                   <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
-                    <span className="text-xs font-bold text-gray-900">Due Today (Prorated):</span>
-                    <span className="text-sm font-bold text-green-700">
-                      {loadingPayment ? '...' : prorationData ? `$${(prorationData.amountDueTodayCents / 100).toFixed(2)}` : '...'}
+                    <span className="font-bold text-gray-900">Amount Due Today (Prorated):</span>
+                    <span className="text-base font-extrabold text-green-700">
+                      {loadingPayment ? 'Calculating…' : prorationData ? `$${(prorationData.amountDueTodayCents / 100).toFixed(2)}` : '...'}
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* Proration Explanation */}
-              <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-900 space-y-1">
+              {/* Explanation Note */}
+              <div className={`p-3.5 rounded-xl text-xs space-y-1 ${isUpgrade ? 'bg-blue-50/70 border border-blue-100 text-blue-900' : 'bg-amber-50/70 border border-amber-200 text-amber-950'}`}>
                 <p className="font-bold flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                  How Stripe Billing &amp; Proration Works:
+                  {isUpgrade ? 'Billing & Proration Details:' : 'Subscription Downgrade Policy:'}
                 </p>
-                <p className="text-[11.5px] leading-relaxed text-blue-800">
-                  {siteCount > Math.max(1, currentSubscribedSites || 1) ? (
-                    <>You are charged a <strong>prorated amount today</strong> for the remainder of your current billing period. Future renewals will bill the full rate.</>
+                <p className="text-[11.5px] leading-relaxed">
+                  {isUpgrade ? (
+                    <>
+                      You are charged a <strong>prorated amount today</strong> for the remainder of your active billing cycle. Your saved card will be charged immediately, and your new site capacity will activate right away.
+                    </>
                   ) : (
-                    <>Changes take effect at the next renewal date. No prorated credits are issued for unused days in the current period.</>
+                    <>
+                      Your downgrade to <strong>{siteCount} sites</strong> is scheduled for your next renewal date. All {currentSubscribed} sites will remain fully active until the end of your current paid period. No prorated credits or refunds are issued for unused time.
+                    </>
                   )}
                 </p>
               </div>
@@ -1382,10 +1436,10 @@ export function SitePricingCalculator({
                   type="button"
                   onClick={handleConfirmSwitchPlan}
                   disabled={loading || loadingPayment}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50"
+                  className={`inline-flex items-center gap-2 px-5 py-2.5 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50 ${isUpgrade ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-700'}`}
                 >
                   {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                  Confirm Change
+                  {isUpgrade ? 'Confirm & Pay Prorated' : 'Confirm Scheduled Downgrade'}
                 </button>
               </div>
             </div>
