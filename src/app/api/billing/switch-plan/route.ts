@@ -172,65 +172,86 @@ export async function POST(req: Request) {
       });
     }
 
+    let validCustomerId = currentSub?.stripeCustomerId || null;
+
     // If company has a Stripe customer ID with saved default payment method, attempt direct charge/subscription
-    if (currentSub?.stripeCustomerId && isStripeConfigured() && newPlan.stripePriceId) {
+    if (validCustomerId && isStripeConfigured() && newPlan.stripePriceId) {
       try {
-        const customer = await stripe.customers.retrieve(currentSub.stripeCustomerId, {
+        const customer = await stripe.customers.retrieve(validCustomerId, {
           expand: ['invoice_settings.default_payment_method'],
         }) as any;
 
-        const defaultPm = customer?.invoice_settings?.default_payment_method;
-        if (defaultPm) {
-          const directLineItems: any[] = [{ price: newPlan.stripePriceId, quantity: newActiveSites }];
-          if (extraEndpoints > 0) {
-            directLineItems.push({ price: process.env.STRIPE_EXTRA_ENDPOINT_PRICE_ID || 'price_1UGi0d33lejKAXgDsWnNcIH4', quantity: extraEndpoints });
-          }
+        if (customer?.deleted) {
+          validCustomerId = null;
+        } else {
+          const defaultPm = customer?.invoice_settings?.default_payment_method;
+          if (defaultPm) {
+            const directLineItems: any[] = [{ price: newPlan.stripePriceId, quantity: newActiveSites }];
+            if (extraEndpoints > 0) {
+              directLineItems.push({ price: process.env.STRIPE_EXTRA_ENDPOINT_PRICE_ID || 'price_1UKgNO3qW08is206blcatghC', quantity: extraEndpoints });
+            }
 
-          const newStripeSub = await stripe.subscriptions.create({
-            customer: currentSub.stripeCustomerId,
-            items: directLineItems,
-            default_payment_method: typeof defaultPm === 'string' ? defaultPm : defaultPm.id,
-            metadata: {
-              companyId: ctx.companyId,
-              planCode: newPlan.code,
-              planId: newPlan.id,
-              extraEndpoints: String(extraEndpoints),
-            },
-          });
-
-          if (newStripeSub.status === 'active' || newStripeSub.status === 'trialing') {
-            const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-            const { data: updatedSub } = await supabase
-              .from('CompanySubscription')
-              .update({
+            const newStripeSub = await stripe.subscriptions.create({
+              customer: validCustomerId,
+              items: directLineItems,
+              default_payment_method: typeof defaultPm === 'string' ? defaultPm : defaultPm.id,
+              metadata: {
+                companyId: ctx.companyId,
+                planCode: newPlan.code,
                 planId: newPlan.id,
-                activeSites: newActiveSites,
+                extraEndpoints: String(extraEndpoints),
+              },
+            });
+
+            if (newStripeSub.status === 'active' || newStripeSub.status === 'trialing') {
+              const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+              const { data: updatedSub } = await supabase
+                .from('CompanySubscription')
+                .update({
+                  planId: newPlan.id,
+                  activeSites: newActiveSites,
+                  extraEndpoints,
+                  status: 'ACTIVE',
+                  stripeSubscriptionId: newStripeSub.id,
+                  currentPeriodEnd,
+                })
+                .eq('id', currentSub.id)
+                .select('*, plan:SubscriptionPlan(*)')
+                .single();
+
+              await auditLog(ctx, 'SWITCH_PLAN', 'CompanySubscription', currentSub.id, {
+                previousPlan: currentSub?.plan?.code,
+                newPlan: newPlan.code,
                 extraEndpoints,
-                status: 'ACTIVE',
-                stripeSubscriptionId: newStripeSub.id,
-                currentPeriodEnd,
-              })
-              .eq('id', currentSub.id)
-              .select('*, plan:SubscriptionPlan(*)')
-              .single();
+                isUpgrade,
+                directCard: true,
+              });
 
-            await auditLog(ctx, 'SWITCH_PLAN', 'CompanySubscription', currentSub.id, {
-              previousPlan: currentSub?.plan?.code,
-              newPlan: newPlan.code,
-              extraEndpoints,
-              isUpgrade,
-              directCard: true,
-            });
-
-            return NextResponse.json({
-              success: true,
-              data: updatedSub,
-              message: `Successfully switched to ${newPlan.name} Plan!`,
-            });
+              return NextResponse.json({
+                success: true,
+                data: updatedSub,
+                message: `Successfully switched to ${newPlan.name} Plan!`,
+              });
+            }
           }
         }
       } catch (directErr: any) {
-        console.warn('Direct subscription using saved card failed, falling back to Stripe Checkout:', directErr.message);
+        console.warn('Direct subscription using saved card failed:', directErr.message);
+        // If customer ID doesn't exist in this Stripe mode (e.g. was created in live mode), reset it
+        if (directErr.code === 'resource_missing' || directErr.message?.includes('No such customer')) {
+          validCustomerId = null;
+          await supabase
+            .from('CompanySubscription')
+            .update({
+              stripeCustomerId: null,
+              stripeSubscriptionId: null,
+              cardBrand: null,
+              cardLast4: null,
+              cardExpMonth: null,
+              cardExpYear: null,
+            })
+            .eq('id', currentSub.id);
+        }
       }
     }
 
@@ -261,7 +282,7 @@ export async function POST(req: Request) {
 
     if (extraEndpoints > 0) {
       line_items.push({
-        price: process.env.STRIPE_EXTRA_ENDPOINT_PRICE_ID || 'price_1UGi0d33lejKAXgDsWnNcIH4',
+        price: process.env.STRIPE_EXTRA_ENDPOINT_PRICE_ID || 'price_1UKgNO3qW08is206blcatghC',
         quantity: extraEndpoints,
       });
     }
@@ -277,8 +298,8 @@ export async function POST(req: Request) {
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      customer: currentSub?.stripeCustomerId || undefined,
-      customer_email: !currentSub?.stripeCustomerId ? customerEmail : undefined,
+      customer: validCustomerId || undefined,
+      customer_email: !validCustomerId ? customerEmail : undefined,
       line_items,
       ...( { managed_payments: { enabled: false } } as any ),
       client_reference_id: ctx.companyId,

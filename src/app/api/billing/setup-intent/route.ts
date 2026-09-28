@@ -30,6 +30,16 @@ export async function POST(req: Request) {
 
     let stripeCustomerId = sub?.stripeCustomerId;
 
+    // Validate customer in Stripe
+    if (stripeCustomerId) {
+      try {
+        const existing = await stripe.customers.retrieve(stripeCustomerId);
+        if ((existing as any).deleted) stripeCustomerId = null;
+      } catch {
+        stripeCustomerId = null;
+      }
+    }
+
     // Ensure Stripe customer exists
     if (!stripeCustomerId) {
       const newCust = await stripe.customers.create({

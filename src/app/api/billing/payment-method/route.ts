@@ -99,6 +99,15 @@ export async function POST(req: Request) {
 
     if (isStripeConfigured()) {
       // Ensure customer exists in Stripe
+      if (stripeCustomerId) {
+        try {
+          const existing = await stripe.customers.retrieve(stripeCustomerId);
+          if ((existing as any).deleted) stripeCustomerId = null;
+        } catch {
+          stripeCustomerId = null;
+        }
+      }
+
       if (!stripeCustomerId) {
         const newCust = await stripe.customers.create({
           name: company?.name || user?.name || 'Workspace Customer',

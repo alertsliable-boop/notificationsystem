@@ -77,12 +77,35 @@ export async function POST(req: Request) {
       });
     }
 
+    let validCustomerId = subscription?.stripeCustomerId || undefined;
+    if (validCustomerId) {
+      try {
+        const cust = await stripe.customers.retrieve(validCustomerId);
+        if ((cust as any).deleted) validCustomerId = undefined;
+      } catch (err: any) {
+        if (err.code === 'resource_missing' || err.message?.includes('No such customer')) {
+          validCustomerId = undefined;
+          await supabase
+            .from('CompanySubscription')
+            .update({
+              stripeCustomerId: null,
+              stripeSubscriptionId: null,
+              cardBrand: null,
+              cardLast4: null,
+              cardExpMonth: null,
+              cardExpYear: null,
+            })
+            .eq('id', subscription?.id);
+        }
+      }
+    }
+
     const origin = req.headers.get('origin') || process.env.NEXTAUTH_URL || 'http://localhost:3000';
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      customer: subscription?.stripeCustomerId || undefined,
-      customer_email: !subscription?.stripeCustomerId ? (user?.email || undefined) : undefined,
+      customer: validCustomerId || undefined,
+      customer_email: !validCustomerId ? (user?.email || undefined) : undefined,
       line_items,
       ...( { managed_payments: { enabled: false } } as any ),
       client_reference_id: ctx.companyId,
