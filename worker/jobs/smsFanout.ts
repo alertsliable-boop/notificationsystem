@@ -62,8 +62,18 @@ export async function processSmsFanout(job: Job) {
   notification.endpoint = endpoint;
   notification.endpoint.recipients = endpointRecipients;
 
+  // SERVER-SIDE CONSENT GUARD:
+  // Only send alarm SMS to recipients who:
+  //   1. Belong to the correct organization (already enforced by endpoint.companyId join)
+  //   2. Have consentStatus === 'ACTIVE' (directly confirmed consent)
+  //   3. Are not opted out (legacy check kept for safety)
+  // PENDING, OPTED_OUT, and REVOKED recipients must never receive operational alarm SMS.
   const activeRecipients = notification.endpoint.recipients.filter(
-    (er: any) => er.recipient && !er.recipient.optedOut
+    (er: any) =>
+      er.recipient &&
+      er.recipient.companyId === endpoint.companyId && // org isolation
+      er.recipient.consentStatus === 'ACTIVE' &&       // must be actively consented
+      !er.recipient.optedOut                           // legacy field double-check
   );
 
   if (activeRecipients.length === 0) {

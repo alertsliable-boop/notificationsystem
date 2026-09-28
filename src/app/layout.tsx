@@ -19,7 +19,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning style={{ backgroundColor: '#F8FAFC' }}>
+      {/*
+        FOUC Prevention:
+        The style attribute on <html> sets the base background before CSS loads.
+        This prevents the white flash before the page styles paint on first load.
+      */}
       <body className={`${inter.variable} ${playfair.variable} font-sans antialiased`}>
         <Providers>{children}</Providers>
       </body>

@@ -977,6 +977,11 @@ export function ChargeHistorySection() {
   );
 }
 
+// Helper: singular/plural site label
+function siteLabel(n: number) {
+  return n === 1 ? '1 site' : `${n} sites`;
+}
+
 // 5. Active Site Volume Tier Calculator & Subscription Plan Switcher
 export function SitePricingCalculator({
   currentActiveSites,
@@ -1345,90 +1350,70 @@ export function SitePricingCalculator({
         </div>
       </div>
       
-      {/* Confirmation Modal */}
-      {showConfirmModal && (
+      {/* ── Upgrade Confirmation Modal ── */}
+      {showConfirmModal && isUpgrade && (
         <Portal>
           <div
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
             onClick={(e) => {
               if (e.target === e.currentTarget && !loading) setShowConfirmModal(false);
             }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upgrade-modal-title"
           >
-            <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative space-y-4 animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative space-y-5 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-4">
                 <div className="flex items-center gap-2.5">
-                  <span className={`p-2 rounded-xl ${isUpgrade ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
-                    {isUpgrade ? <CreditCard className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
+                  <span className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                    <CreditCard className="w-5 h-5" />
                   </span>
                   <div>
-                    <h3 className="font-bold text-[17px] text-gray-900">
-                      {isUpgrade ? 'Confirm Site Upgrade' : 'Confirm Subscription Downgrade'}
-                    </h3>
-                    <p className="text-xs text-gray-500">
-                      {isUpgrade ? 'Review prorated charge and immediate activation' : 'Review renewal schedule and quota adjustments'}
-                    </p>
+                    <h3 id="upgrade-modal-title" className="font-bold text-[17px] text-gray-900">Confirm Upgrade and Payment</h3>
+                    <p className="text-xs text-gray-500">Review billing summary before confirming</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowConfirmModal(false)}
                   className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg"
+                  aria-label="Close"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Summary Box */}
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-2.5 text-xs">
+              {/* Billing Summary */}
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3 text-sm">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-500 font-medium">Current Plan:</span>
-                  <span className="font-semibold text-gray-700">{currentSubscribed} sites (${currentMonthlyTotal.toFixed(2)}/mo)</span>
+                  <span className="text-gray-600 font-medium">Amount charged today:</span>
+                  <span className="text-xl font-extrabold text-gray-900">
+                    {loadingPayment ? 'Calculating…' : prorationData ? `$${(prorationData.amountDueTodayCents / 100).toFixed(2)}` : '...'}
+                  </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500 font-medium">New Plan:</span>
-                  <span className="font-bold text-gray-900">{currentTier.name} ({siteCount} sites)</span>
+                <div className="flex justify-between items-center border-t border-gray-200 pt-2">
+                  <span className="text-gray-600 font-medium">New monthly total:</span>
+                  <span className="font-bold text-blue-700">${monthlyTotal.toFixed(2)}/month</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500 font-medium">New Monthly Recurring Rate:</span>
-                  <span className="font-bold text-blue-700">${monthlyTotal.toFixed(2)}/mo</span>
-                </div>
-
-                {isUpgrade && (
-                  <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
-                    <span className="font-bold text-gray-900">Amount Due Today (Prorated):</span>
-                    <span className="text-base font-extrabold text-green-700">
-                      {loadingPayment ? 'Calculating…' : prorationData ? `$${(prorationData.amountDueTodayCents / 100).toFixed(2)}` : '...'}
-                    </span>
-                  </div>
-                )}
               </div>
 
-              {/* Explanation Note */}
-              <div className={`p-3.5 rounded-xl text-xs space-y-1 ${isUpgrade ? 'bg-blue-50/70 border border-blue-100 text-blue-900' : 'bg-amber-50/70 border border-amber-200 text-amber-950'}`}>
-                <p className="font-bold flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                  {isUpgrade ? 'Billing & Proration Details:' : 'Subscription Downgrade Policy:'}
-                </p>
-                <p className="text-[11.5px] leading-relaxed">
-                  {isUpgrade ? (
-                    <>
-                      You are charged a <strong>prorated amount today</strong> for the remainder of your active billing cycle. Your saved card will be charged immediately, and your new site capacity will activate right away.
-                    </>
-                  ) : (
-                    <>
-                      Your downgrade to <strong>{siteCount} sites</strong> is scheduled for your next renewal date. All {currentSubscribed} sites will remain fully active until the end of your current paid period. No prorated credits or refunds are issued for unused time.
-                    </>
-                  )}
-                </p>
+              {/* Disclosure */}
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                <p className="font-semibold">By confirming, you will be charged the prorated amount now with the credit card on file.</p>
               </div>
 
-              {/* Modal Actions */}
-              <div className="flex items-center justify-end gap-2.5 pt-2">
+              {/* Authorization text */}
+              <p className="text-[11.5px] text-gray-600 leading-relaxed">
+                {`By clicking "Pay ${prorationData ? `$${(prorationData.amountDueTodayCents / 100).toFixed(2)}` : '...'} & Upgrade Now," you authorize Liable Alerts to charge your saved payment method ${prorationData ? `$${(prorationData.amountDueTodayCents / 100).toFixed(2)}` : 'the prorated amount'} immediately. Your site upgrade will become active as soon as payment is successful. Beginning with your next billing cycle, your subscription will renew at $${monthlyTotal.toFixed(2)} per month.`}
+              </p>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowConfirmModal(false)}
                   disabled={loading}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"
+                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition border border-gray-200"
                 >
                   Cancel
                 </button>
@@ -1436,21 +1421,308 @@ export function SitePricingCalculator({
                   type="button"
                   onClick={handleConfirmSwitchPlan}
                   disabled={loading || loadingPayment}
-                  className={`inline-flex items-center gap-2 px-5 py-2.5 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50 ${isUpgrade ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-700'}`}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#f97316] hover:bg-[#ea6c0a] text-white text-sm font-bold rounded-xl shadow transition disabled:opacity-50"
+                  aria-label={`Pay ${prorationData ? `$${(prorationData.amountDueTodayCents / 100).toFixed(2)}` : ''} and upgrade`}
                 >
-                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                  {isUpgrade ? 'Confirm & Pay Prorated' : 'Confirm Scheduled Downgrade'}
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                  {`Pay ${prorationData ? `$${(prorationData.amountDueTodayCents / 100).toFixed(2)}` : '...'} & Upgrade Now`}
                 </button>
               </div>
             </div>
           </div>
         </Portal>
       )}
+
+      {/* ── Downgrade: Site Selection + Confirmation Modal ── */}
+      {showConfirmModal && isDowngrade && (
+        <DowngradeFlow
+          currentSubscribed={currentSubscribed}
+          currentMonthlyTotal={currentMonthlyTotal}
+          targetSites={siteCount}
+          newMonthlyTotal={monthlyTotal}
+          companyId={''}  // validated server-side
+          onCancel={() => setShowConfirmModal(false)}
+          onSuccess={() => {
+            setShowConfirmModal(false);
+            window.location.href = '/billing?status=updated';
+          }}
+        />
+      )}
     </div>
   );
 }
 
+// ─── Downgrade Flow Component (Site Selection → Confirmation) ────────────────
+function DowngradeFlow({
+  currentSubscribed,
+  currentMonthlyTotal,
+  targetSites,
+  newMonthlyTotal,
+  companyId,
+  onCancel,
+  onSuccess,
+}: {
+  currentSubscribed: number;
+  currentMonthlyTotal: number;
+  targetSites: number;
+  newMonthlyTotal: number;
+  companyId: string;
+  onCancel: () => void;
+  onSuccess: () => void;
+}) {
+  const [step, setStep] = useState<'select-site' | 'confirm'>('select-site');
+  const [sites, setSites] = useState<any[]>([]);
+  const [loadingSites, setLoadingSites] = useState(true);
+  const [selectedSiteId, setSelectedSiteId] = useState('');
+  const [selectedSiteName, setSelectedSiteName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [nextBillingDate, setNextBillingDate] = useState('');
+
+  useEffect(() => {
+    // Load the company's sites and next billing date
+    Promise.all([
+      fetch('/api/sites').then(r => r.json()),
+      fetch('/api/billing/preview-proration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newSitesCount: targetSites }),
+      }).then(r => r.json()),
+    ]).then(([sitesJson, prorationJson]) => {
+      setSites(sitesJson.data || []);
+      if (prorationJson.nextBillingDate) {
+        setNextBillingDate(
+          new Date(prorationJson.nextBillingDate * 1000).toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          })
+        );
+      }
+    }).catch(console.error).finally(() => setLoadingSites(false));
+  }, [targetSites]);
+
+  const handleSelectSite = (siteId: string, siteName: string) => {
+    setSelectedSiteId(siteId);
+    setSelectedSiteName(siteName);
+  };
+
+  const handleConfirm = async () => {
+    if (!selectedSiteId) {
+      setSubmitError('Please select a site to deactivate.');
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      const res = await fetch('/api/billing/schedule-downgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetSites,
+          siteIdToDeactivate: selectedSiteId,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setSubmitError(json.error || 'Failed to schedule downgrade');
+        return;
+      }
+      onSuccess();
+    } catch (err: any) {
+      setSubmitError(err.message || 'An error occurred');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Portal>
+      <div
+        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="downgrade-modal-title"
+      >
+        <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative space-y-5 animate-in fade-in zoom-in-95 duration-200">
+
+          {step === 'select-site' ? (
+            <>
+              <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                    <Layers className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 id="downgrade-modal-title" className="font-bold text-[17px] text-gray-900">Select Site to Deactivate</h3>
+                    <p className="text-xs text-gray-500">Choose which site will be removed when the downgrade takes effect</p>
+                  </div>
+                </div>
+                <button type="button" onClick={onCancel} className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg" aria-label="Close">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-900 text-xs">
+                  <p className="font-semibold mb-1">Downgrade from {siteLabel(currentSubscribed)} to {siteLabel(targetSites)}</p>
+                  <p>Select exactly which site will be deactivated when the downgrade takes effect on {nextBillingDate || 'your next billing date'}.</p>
+                </div>
+
+                {loadingSites ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                  </div>
+                ) : sites.length === 0 ? (
+                  <p className="text-gray-500 text-xs py-4 text-center">No sites found. Please contact support.</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {sites.map((site: any) => (
+                      <label
+                        key={site.id}
+                        className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${
+                          selectedSiteId === site.id
+                            ? 'border-amber-500 bg-amber-50'
+                            : 'border-gray-200 hover:border-gray-300 bg-gray-50/50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="siteToDeactivate"
+                          value={site.id}
+                          checked={selectedSiteId === site.id}
+                          onChange={() => handleSelectSite(site.id, site.name)}
+                          className="w-4 h-4 text-amber-600 border-gray-300 focus:ring-amber-500"
+                          aria-label={`Select ${site.name} for deactivation`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 text-sm truncate">{site.name}</p>
+                          {site.address && <p className="text-xs text-gray-500 truncate">{site.address}</p>}
+                        </div>
+                        {selectedSiteId === site.id && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white">Will be deactivated</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button type="button" onClick={onCancel} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition border border-gray-200">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedSiteId) { setSubmitError('Please select a site.'); return; }
+                    setSubmitError('');
+                    setStep('confirm');
+                  }}
+                  disabled={!selectedSiteId}
+                  className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl transition disabled:opacity-50"
+                >
+                  Continue →
+                </button>
+              </div>
+              {submitError && <p className="text-xs text-red-600 text-right">{submitError}</p>}
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                    <Calendar className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 id="downgrade-modal-title" className="font-bold text-[17px] text-gray-900">Schedule Subscription Downgrade</h3>
+                    <p className="text-xs text-gray-500">Review the scheduled change before confirming</p>
+                  </div>
+                </div>
+                <button type="button" onClick={onCancel} className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg" aria-label="Close">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">Current plan:</span>
+                  <span className="font-semibold text-gray-700">{siteLabel(currentSubscribed)} — ${currentMonthlyTotal.toFixed(2)}/month</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">New plan:</span>
+                  <span className="font-bold text-gray-900">{siteLabel(targetSites)} — ${newMonthlyTotal.toFixed(2)}/month</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">Site to deactivate:</span>
+                  <span className="font-bold text-amber-700">{selectedSiteName}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">Effective date:</span>
+                  <span className="font-bold text-gray-900">{nextBillingDate || 'Next billing date'}</span>
+                </div>
+                <div className="flex justify-between items-center border-t border-gray-200 pt-2">
+                  <span className="font-bold text-gray-900">Charge today:</span>
+                  <span className="font-bold text-gray-700">$0.00</span>
+                </div>
+              </div>
+
+              {/* Explanation */}
+              <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl text-xs text-amber-950 space-y-2">
+                <p className="font-semibold">What happens next:</p>
+                <p className="leading-relaxed">
+                  {`Your current ${currentSubscribed === 2 ? 'two-site' : `${currentSubscribed}-site`} plan will remain active until ${nextBillingDate || 'your next billing date'}. On that date, your subscription will renew at $${newMonthlyTotal.toFixed(2)} per month, and `}
+                  <strong>{selectedSiteName}</strong>
+                  {` will be deactivated.`}
+                </p>
+                <p className="leading-relaxed">
+                  Once deactivated, that site will stop receiving alarm emails and sending SMS notifications. No prorated credit or refund will be issued for the remaining time in your current billing period.
+                </p>
+              </div>
+
+              {submitError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />{submitError}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStep('select-site')}
+                  disabled={submitting}
+                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition border border-gray-200"
+                >
+                  ← Back
+                </button>
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  disabled={submitting}
+                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition border border-gray-200"
+                >
+                  Keep Current Plan
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirm}
+                  disabled={submitting}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl shadow transition disabled:opacity-50"
+                  aria-label={`Schedule downgrade for ${nextBillingDate}`}
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  {`Schedule Downgrade for ${nextBillingDate || 'Next Billing Date'}`}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
 // 6. Endpoint SMS Credits & Automatic Overage Management Section
+
 export function SmsUsageOverview({
   includedCredits,
   totalCreditsUsed,

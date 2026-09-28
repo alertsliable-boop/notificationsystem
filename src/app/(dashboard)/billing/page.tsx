@@ -355,7 +355,7 @@ export default async function BillingPage({
 
                   <div className="flex flex-wrap items-center gap-2 mt-2">
                     <span className="text-xs font-bold text-blue-900 bg-blue-100/70 px-2.5 py-1 rounded-lg">
-                      {usage.activeSitesQuota} Active Site Quota
+                      {usage.activeSitesQuota} Active {usage.activeSitesQuota === 1 ? 'Site' : 'Sites'} Quota
                     </span>
                     {usage.extraEndpoints > 0 && (
                       <span className="text-xs font-bold text-indigo-900 bg-indigo-100/70 px-2.5 py-1 rounded-lg">
