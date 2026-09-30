@@ -95,7 +95,7 @@ export default async function TeamPage() {
                   
                   {isOwnerOrAdmin && !isCurrentUser && (
                     <div className="flex items-center gap-1.5">
-                      <ResendInviteButton membershipId={m.id} memberEmail={m.user.email} />
+                      <ResendInviteButton membershipId={m.id} memberEmail={m.user.email} memberName={m.user.name} />
                       <RemoveMemberButton id={m.id} disabled={isCurrentUser || m.role === 'OWNER'} />
                     </div>
                   )}

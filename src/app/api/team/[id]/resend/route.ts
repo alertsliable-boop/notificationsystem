@@ -19,10 +19,21 @@ export async function POST(
   const { id } = await params;
 
   try {
-    let resetPassword = false;
+    let resetPassword = true; // Default to true so a temporary password is provided
+    let updatedEmail = '';
+    let updatedName = '';
+
     try {
       const body = await req.json();
-      resetPassword = !!body.resetPassword;
+      if (typeof body.resetPassword === 'boolean') {
+        resetPassword = body.resetPassword;
+      }
+      if (body.email && typeof body.email === 'string') {
+        updatedEmail = body.email.toLowerCase().trim();
+      }
+      if (body.name && typeof body.name === 'string') {
+        updatedName = body.name.trim();
+      }
     } catch {
       // Body is optional
     }
@@ -41,7 +52,42 @@ export async function POST(
       return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
     }
 
-    const memberEmail = membership.user.email;
+    let memberEmail = membership.user.email;
+    let memberName = membership.user.name || memberEmail.split('@')[0];
+
+    // If an updated email address was submitted (e.g. correcting a typo like jsmikle -> jsmilde)
+    if (updatedEmail && updatedEmail !== memberEmail) {
+      // Check if another existing user already has this email
+      const { data: existingOtherUser } = await supabase
+        .from('User')
+        .select('id')
+        .eq('email', updatedEmail)
+        .neq('id', membership.user.id)
+        .single();
+
+      if (existingOtherUser) {
+        return NextResponse.json({
+          error: `Another user account with email "${updatedEmail}" already exists.`,
+        }, { status: 400 });
+      }
+
+      await supabase
+        .from('User')
+        .update({
+          email: updatedEmail,
+          ...(updatedName ? { name: updatedName } : {}),
+        })
+        .eq('id', membership.user.id);
+
+      memberEmail = updatedEmail;
+      if (updatedName) memberName = updatedName;
+    } else if (updatedName && updatedName !== memberName) {
+      await supabase
+        .from('User')
+        .update({ name: updatedName })
+        .eq('id', membership.user.id);
+      memberName = updatedName;
+    }
 
     // Fetch company name
     const { data: company } = await supabase
@@ -105,7 +151,11 @@ export async function POST(
     return NextResponse.json({
       success: true,
       emailSent: true,
-      message: `Invitation successfully resent to ${memberEmail} from ${senderName} (${senderEmail}).`,
+      updatedEmail: memberEmail,
+      updatedName: memberName,
+      tempPassword: newTempPassword || undefined,
+      messageId: emailResult.messageId,
+      message: `Invitation successfully sent to ${memberEmail} from ${senderName} (${senderEmail}).`,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });

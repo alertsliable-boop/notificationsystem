@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Mail, Loader2, Trash2, Plus, CheckCircle2, AlertCircle, Info, Send, RefreshCw, KeyRound } from 'lucide-react';
+import { Mail, Loader2, Trash2, Plus, CheckCircle2, AlertCircle, Info, Send, KeyRound, X, Edit3 } from 'lucide-react';
 
 export function TeamInviteForm({ onAdd }: { onAdd?: () => void }) {
   const [email, setEmail] = useState('');
@@ -51,7 +51,7 @@ export function TeamInviteForm({ onAdd }: { onAdd?: () => void }) {
     }
   };
 
-  const handleResendToExisting = async (resetPassword: boolean = false) => {
+  const handleResendToExisting = async (resetPassword: boolean = true) => {
     if (!existingUser) return;
     setResendingExisting(true);
     setError('');
@@ -127,21 +127,20 @@ export function TeamInviteForm({ onAdd }: { onAdd?: () => void }) {
           <div className="flex flex-wrap gap-2 pt-1 pl-6">
             <button
               type="button"
-              onClick={() => handleResendToExisting(false)}
+              onClick={() => handleResendToExisting(true)}
               disabled={resendingExisting}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition disabled:opacity-50"
             >
               {resendingExisting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              Resend Invite Email
+              Resend with Fresh Password
             </button>
             <button
               type="button"
-              onClick={() => handleResendToExisting(true)}
+              onClick={() => handleResendToExisting(false)}
               disabled={resendingExisting}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-amber-300 hover:bg-amber-100/50 text-amber-800 rounded-lg text-xs font-semibold shadow-xs transition disabled:opacity-50"
             >
-              <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-              Reset Password & Resend
+              Resend with Existing Login
             </button>
             <button
               type="button"
@@ -214,78 +213,260 @@ export function TeamInviteForm({ onAdd }: { onAdd?: () => void }) {
 export function ResendInviteButton({
   membershipId,
   memberEmail,
+  memberName,
 }: {
   membershipId: string;
   memberEmail: string;
+  memberName?: string;
 }) {
-  const [resending, setResending] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [feedback, setFeedback] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [email, setEmail] = useState(memberEmail);
+  const [name, setName] = useState(memberName || '');
+  const [resetPassword, setResetPassword] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [generatedPassword, setGeneratedPassword] = useState('');
+  const [copied, setCopied] = useState(false);
 
-  const handleResend = async (resetPassword: boolean = false) => {
-    setResending(true);
-    setStatus('idle');
-    setFeedback('');
+  const handleOpen = () => {
+    setEmail(memberEmail);
+    setName(memberName || '');
+    setResetPassword(true);
+    setError('');
+    setSuccess('');
+    setGeneratedPassword('');
+    setCopied(false);
+    setModalOpen(true);
+  };
+
+  const handleClose = () => {
+    if (sending) return;
+    setModalOpen(false);
+    if (success) {
+      window.location.reload();
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSending(true);
+    setError('');
+    setSuccess('');
+    setGeneratedPassword('');
 
     try {
       const res = await fetch(`/api/team/${membershipId}/resend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resetPassword }),
+        body: JSON.stringify({
+          email: email.trim(),
+          name: name.trim() || undefined,
+          resetPassword,
+        }),
       });
 
       const json = await res.json();
       if (!res.ok) {
-        alert(json.error || 'Failed to resend invite');
-        setStatus('error');
-        setResending(false);
+        setError(json.error || 'Failed to send invite');
+        setSending(false);
         return;
       }
 
-      setStatus('success');
-      setFeedback('Invite resent!');
-      setTimeout(() => {
-        setStatus('idle');
-        setFeedback('');
-      }, 4000);
+      setSuccess(json.message || `Invitation sent to ${email}!`);
+      if (json.tempPassword) {
+        setGeneratedPassword(json.tempPassword);
+      }
+      setSending(false);
     } catch (err: any) {
-      alert(err.message || 'Error resending invite');
-      setStatus('error');
-    } finally {
-      setResending(false);
+      setError(err.message || 'Error sending invite');
+      setSending(false);
     }
   };
 
-  if (status === 'success') {
-    return (
-      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-lg">
-        <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-        {feedback || 'Invite Resent!'}
-      </span>
-    );
-  }
-
   return (
-    <button
-      onClick={() => {
-        const wantsReset = confirm(
-          `Resend invitation email to ${memberEmail}?\n\nClick OK to resend with existing credentials, or Cancel to abort.\n(If they need a brand-new temporary password generated, choose to reset in the Add Member form above.)`
-        );
-        if (wantsReset) {
-          handleResend(false);
-        }
-      }}
-      disabled={resending}
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 rounded-lg transition-all disabled:opacity-50"
-      title={`Resend invitation email to ${memberEmail}`}
-    >
-      {resending ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-      ) : (
-        <Send className="w-3.5 h-3.5 text-gray-500" />
+    <>
+      <button
+        onClick={handleOpen}
+        type="button"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 rounded-lg transition-all shadow-2xs"
+        title={`Resend invitation to ${memberEmail}`}
+      >
+        <Send className="w-3.5 h-3.5 text-blue-600" />
+        <span>Resend Invite</span>
+      </button>
+
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl max-w-md w-full overflow-hidden animate-scaleUp">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-blue-50/50 to-indigo-50/30">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                  <Send className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-sm">Resend Workspace Invitation</h3>
+                  <p className="text-[11px] text-gray-500">Delivered directly via Resend email service</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleClose}
+                disabled={sending}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-500" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {success ? (
+                <div className="space-y-4 py-1">
+                  <div className="p-3.5 bg-green-50 border border-green-200 rounded-xl text-xs text-green-900 space-y-1.5">
+                    <div className="flex items-center gap-2 font-bold text-green-800">
+                      <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                      <span>{success}</span>
+                    </div>
+                  </div>
+
+                  {generatedPassword && (
+                    <div className="p-3.5 bg-blue-50/90 border border-blue-200 rounded-xl space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-bold text-blue-900">
+                        <KeyRound className="w-4 h-4 text-blue-600" />
+                        <span>New Temporary Password:</span>
+                      </div>
+                      <div className="flex items-center justify-between bg-white border border-blue-200 rounded-lg px-3 py-2">
+                        <code className="font-mono text-sm font-bold text-blue-900 tracking-wider">
+                          {generatedPassword}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(generatedPassword);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 2500);
+                          }}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-800 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 rounded-md transition"
+                        >
+                          {copied ? 'Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-blue-700 leading-normal">
+                        This password was also sent directly inside the invitation email to <strong>{email}</strong>.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
+                    <Info className="w-4 h-4 flex-shrink-0 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-amber-900">Important Delivery Note</p>
+                      <p className="mt-0.5 text-amber-700 leading-relaxed">
+                        If <strong>{email}</strong> does not see the invite in their primary inbox, please have them check their <strong>Junk Email</strong> or <strong>Spam</strong> folder and mark it as <em>&quot;Not Junk&quot;</em>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      className="px-5 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 transition"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wider mb-1">
+                      Recipient Name
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Jamaal Smilde"
+                      className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wider mb-1">
+                      Email Address *
+                    </label>
+                    <input
+                      required
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="colleague@liablecontrols.com"
+                      className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-mono"
+                    />
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Verify spelling carefully (e.g. <code>jsmilde</code> vs <code>jsmikle</code>). You can correct any typo here before sending.
+                    </p>
+                  </div>
+
+                  {/* Password Reset Section */}
+                  <div className="p-3.5 bg-gradient-to-r from-blue-50/70 to-indigo-50/50 border border-blue-200 rounded-xl space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900 mb-1">
+                      <KeyRound className="w-4 h-4 text-blue-600" />
+                      <span>Password Reset Option</span>
+                    </div>
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={resetPassword}
+                        onChange={(e) => setResetPassword(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer flex-shrink-0"
+                      />
+                      <div>
+                        <p className="text-xs font-semibold text-gray-900">
+                          Generate fresh temporary password on resend
+                        </p>
+                        <p className="text-[11px] text-gray-600 leading-normal mt-0.5">
+                          Sets a new temporary password and includes it directly inside the email so the user can log in immediately without needing password recovery.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      disabled={sending}
+                      className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-semibold hover:bg-gray-50 transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={sending}
+                      className="inline-flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition disabled:opacity-50 shadow-xs"
+                    >
+                      {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                      {sending ? 'Sending via Resend...' : 'Send Invitation Now'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
       )}
-      <span>Resend Invite</span>
-    </button>
+    </>
   );
 }
 

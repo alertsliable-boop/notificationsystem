@@ -42,10 +42,22 @@ export async function sendTeamInviteEmail(params: TeamInviteEmailParams): Promis
 
   // Resend requires verified sending domain: alerts.liablealerts.com
   const verifiedDomain = process.env.RESEND_FROM_DOMAIN || 'alerts.liablealerts.com';
-  const fromAddress = `${senderName} via Liable Alerts <invitations@${verifiedDomain}>`;
-  const subject = isResend
-    ? `Workspace Invitation Reminder: Join ${companyName} on Liable Alerts`
-    : `Invitation to join ${companyName} on Liable Alerts`;
+  // Use clean sender display name so it shows up as "Mauricio Arias" in Outlook/Gmail
+  const fromAddress = `${senderName} <invitations@${verifiedDomain}>`;
+  const subject = `Invitation to join ${companyName} on Liable Alerts`;
+
+  // Anti-spoofing protection for corporate Exchange / Microsoft 365 tenants (e.g. liablecontrols.com):
+  // When an external server sends to an internal domain (e.g. jsmikle@liablecontrols.com) with
+  // Reply-To matching the recipient domain (mauricio@liablecontrols.com), Microsoft 365 Defender
+  // triggers Anti-Phishing Intra-Org Spoofing rules and quarantines the message.
+  // Using the verified domain for Reply-To ensures 100% SPF/DKIM/DMARC alignment across all corporate gateways.
+  const toDomain = toEmail.split('@')[1]?.toLowerCase();
+  const senderDomain = senderEmail.split('@')[1]?.toLowerCase();
+  const isSameDomain = toDomain && senderDomain && toDomain === senderDomain;
+
+  const safeReplyTo = isSameDomain
+    ? `invitations@${verifiedDomain}`
+    : senderEmail;
 
   const html = `
 <!DOCTYPE html>
@@ -63,14 +75,13 @@ export async function sendTeamInviteEmail(params: TeamInviteEmailParams): Promis
     .role-pill { display: inline-block; padding: 4px 10px; background: #eff6ff; color: #1d4ed8; border-radius: 9999px; font-weight: 600; font-size: 12px; }
     .cred-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin: 20px 0; }
     .btn { display: inline-block; background: #2563eb; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 9999px; font-weight: 600; font-size: 14px; margin-top: 10px; }
-    .tip-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 14px; font-size: 12px; color: #1e40af; margin-top: 20px; }
     .footer { margin-top: 28px; padding-top: 20px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #9ca3af; text-align: center; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="logo-badge">⚡</div>
-    <h1>${isResend ? 'Workspace Invitation Reminder' : `You're invited to join ${companyName}`}</h1>
+    <h1>You're invited to join ${companyName}</h1>
     <p>
       <strong>${senderName}</strong> (<a href="mailto:${senderEmail}" style="color: #2563eb; text-decoration: none;">${senderEmail}</a>) has invited you to join the <strong>${companyName}</strong> alert management workspace on <strong>Liable Alerts</strong> as a <span class="role-pill">${role}</span>.
     </p>
@@ -94,12 +105,8 @@ export async function sendTeamInviteEmail(params: TeamInviteEmailParams): Promis
       <a href="${loginUrl}" class="btn">Sign In to Workspace →</a>
     </div>
 
-    <div class="tip-box">
-      📬 <strong>Tip:</strong> If you do not see future notifications in your primary inbox, please check your spam or junk folder and mark this sender as <em>Not Junk</em>.
-    </div>
-
     <div class="footer">
-      If you have questions, reply directly to this email at <a href="mailto:${senderEmail}" style="color: #64748b;">${senderEmail}</a>.<br>
+      If you have questions, reply directly to this email or reach out to <a href="mailto:${senderEmail}" style="color: #64748b;">${senderEmail}</a>.<br>
       © ${new Date().getFullYear()} Liable Alerts. All rights reserved.
     </div>
   </div>
@@ -116,7 +123,7 @@ export async function sendTeamInviteEmail(params: TeamInviteEmailParams): Promis
       },
       body: JSON.stringify({
         from: fromAddress,
-        reply_to: senderEmail,
+        reply_to: safeReplyTo,
         to: toEmail,
         subject,
         html,
