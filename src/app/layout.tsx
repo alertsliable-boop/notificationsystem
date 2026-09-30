@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Providers from '@/components/Providers';
+import SupportWidget from '@/components/SupportWidget';
 import { Inter, Playfair_Display } from 'next/font/google';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -26,7 +27,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         This prevents the white flash before the page styles paint on first load.
       */}
       <body className={`${inter.variable} ${playfair.variable} font-sans antialiased`}>
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <SupportWidget />
+        </Providers>
       </body>
     </html>
   );

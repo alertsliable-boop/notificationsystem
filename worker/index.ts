@@ -130,7 +130,11 @@ async function processSmsJob(job: Job) {
         const e = error as { code?: string; message?: string };
         await supabase
           .from('SmsMessage')
-          .update({ status: 'FAILED', errorCode: String(e.code || 'UNKNOWN') })
+          .update({ 
+            status: 'FAILED', 
+            errorCode: String(e.code || 'UNKNOWN'),
+            errorMessage: e.message || String(error)
+          })
           .eq('id', smsMessage.id);
         console.error(`[WORKER] SMS failed → ${er.recipient.phoneE164}:`, e.message);
       }

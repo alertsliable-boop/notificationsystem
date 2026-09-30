@@ -177,6 +177,7 @@ export async function processSmsFanout(job: Job) {
         recipientId: phoneRecipient.id,
         status: 'FAILED',
         errorCode: error.code?.toString() || 'UNKNOWN',
+        errorMessage: error.message || String(error),
         segments,
       });
     }

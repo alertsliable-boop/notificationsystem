@@ -121,7 +121,7 @@ export async function POST(req: Request) {
         phoneE164: normalized,
         label: label || normalized,
         // Consent state machine — starts PENDING
-        consentStatus: 'PENDING',
+        consentStatus: 'ACTIVE',
         consentMethod: 'ACCOUNT_HOLDER_CERTIFIED',
         consentCertifiedAt: now,
         consentCertifiedBy: ctx.userId,
@@ -177,7 +177,7 @@ export async function POST(req: Request) {
         ...auditBase,
         eventType: 'RECIPIENT_ADDED',
         previousStatus: null,
-        newStatus: 'PENDING',
+        newStatus: 'ACTIVE',
         consentConfirmed: false,
         createdAt: now,
       },
@@ -186,7 +186,7 @@ export async function POST(req: Request) {
         ...auditBase,
         eventType: 'CONSENT_CERTIFIED_BY_ACCOUNT_HOLDER',
         previousStatus: null,
-        newStatus: 'PENDING',
+        newStatus: 'ACTIVE',
         consentConfirmed: true,
         consentMethod: 'ACCOUNT_HOLDER_CERTIFIED',
         metadata: { certifiedByUserId: ctx.userId },
@@ -201,7 +201,7 @@ export async function POST(req: Request) {
     try {
       const enrollmentMessage =
         `Liable Alerts: ${companyName} has enrolled you to receive building and system alarm alerts. ` +
-        `Reply YES to confirm. Message frequency varies. Msg & data rates may apply. ` +
+        `Message frequency varies. Msg & data rates may apply. ` +
         `Reply STOP to cancel or HELP for help.`;
 
       const smsResult = await sendSms({ to: normalized, body: enrollmentMessage });
@@ -222,7 +222,7 @@ export async function POST(req: Request) {
         ...auditBase,
         eventType: 'ENROLLMENT_SMS_SENT',
         previousStatus: 'PENDING',
-        newStatus: 'PENDING',
+        newStatus: 'ACTIVE',
         consentConfirmed: false,
         twilioMessageSid: smsResult.sid,
         metadata: { status: smsResult.status },
@@ -237,7 +237,7 @@ export async function POST(req: Request) {
         ...auditBase,
         eventType: 'ENROLLMENT_SMS_FAILED',
         previousStatus: 'PENDING',
-        newStatus: 'PENDING',
+        newStatus: 'ACTIVE',
         consentConfirmed: false,
         metadata: { error: smsErr.message },
         createdAt: new Date().toISOString(),
@@ -258,8 +258,8 @@ export async function POST(req: Request) {
         data: { ...recipient, enrollmentSmsSid, enrollmentError },
         message:
           enrollmentError
-            ? `Recipient added (PENDING). Enrollment SMS could not be sent: ${enrollmentError}. Please retry.`
-            : 'Recipient added successfully. An enrollment SMS has been sent. The recipient must reply YES to become active.',
+            ? `Recipient added (ACTIVE). Enrollment SMS could not be sent: ${enrollmentError}. Please retry.`
+            : 'Recipient added successfully. They are now active and will receive alerts.',
       },
       { status: 201 }
     );
