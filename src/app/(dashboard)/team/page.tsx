@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getAdminClient } from '@/lib/supabase';
 import { Users, Shield, Crown, UserCheck, Mail } from 'lucide-react';
-import { TeamInviteForm, RemoveMemberButton } from './TeamManager';
+import { TeamInviteForm, RemoveMemberButton, ResendInviteButton } from './TeamManager';
 
 export const metadata = { title: 'Team | Liable Alerts' };
 
@@ -93,8 +93,11 @@ export default async function TeamPage() {
                     {role.label}
                   </span>
                   
-                  {isOwnerOrAdmin && (
-                    <RemoveMemberButton id={m.id} disabled={isCurrentUser || m.role === 'OWNER'} />
+                  {isOwnerOrAdmin && !isCurrentUser && (
+                    <div className="flex items-center gap-1.5">
+                      <ResendInviteButton membershipId={m.id} memberEmail={m.user.email} />
+                      <RemoveMemberButton id={m.id} disabled={isCurrentUser || m.role === 'OWNER'} />
+                    </div>
                   )}
                 </div>
               </div>

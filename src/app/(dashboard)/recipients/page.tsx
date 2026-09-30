@@ -92,6 +92,12 @@ export default function RecipientsPage() {
       return;
     }
 
+    if (!editingId && !consentGiven) {
+      setError('Consent certification is required. You must confirm that this recipient has expressly agreed to receive automated alarm text messages before adding them.');
+      setSaving(false);
+      return;
+    }
+
     const url = editingId ? `/api/recipients/${editingId}` : '/api/recipients';
     const method = editingId ? 'PATCH' : 'POST';
 
@@ -101,6 +107,7 @@ export default function RecipientsPage() {
           phoneE164,
           label,
           endpointId: selectedEndpointId || undefined,
+          consentCertified: consentGiven,
         });
 
     const res = await fetch(url, {
